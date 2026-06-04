@@ -3203,7 +3203,7 @@ let bossPortraitCacheH = 0;
 function drawBossIntroOverlay(targetCtx = ctx) {
     const introDuration = 210;
     const progress = clamp(1 - bossIntroTimer / introDuration, 0, 1);
-    const portraitSide = bossNumber % 2 === 0 ? -1 : 1;
+    const portraitSide = 1;
     const portraitHeight = Math.round(canvas.height * 0.66);
     const portraitWidth = Math.round(portraitHeight * (1688 / 1125));
     const portraitTargetX = Math.round(canvas.width * (portraitSide < 0 ? 0.34 : 0.66));
@@ -3765,7 +3765,7 @@ function draw() {
     if (levelTransitionActive) {
         const progress = 1 - (levelTransitionTimer / 150);
         const alpha = progress < 0.2 ? progress / 0.2 : progress > 0.8 ? (1 - progress) / 0.2 : 1;
-        const transitionLabel = shouldTriggerBossFight(level) ? 'BOSS FIGHT' : `LEVEL ${level + 1}`;
+        const transitionLabel = shouldTriggerBossFight(level) ? 'A CHALLENGER APPROACHES' : `LEVEL ${level + 1}`;
         ctx.save();
         ctx.globalAlpha = alpha;
         ctx.font = 'bold 72px "Courier New", monospace';
