@@ -1892,10 +1892,12 @@ function absorbShieldHit(x, y) {
     if (!ship || !ship.shield) return false;
 
     ship.shield = false;
+    ship.invincible = 45; // brief invincibility after shield break
     shieldFlashTimer = 8;
-    screenShakeTimer = Math.max(screenShakeTimer, 8);
+    screenShakeTimer = Math.max(screenShakeTimer, 12);
     playShieldBreakSound();
 
+    // Shield burst particles
     for (let i = 0; i < 22; i++) {
         const angle = Math.random() * Math.PI * 2;
         const speed = 1.5 + Math.random() * 4;
@@ -1910,7 +1912,21 @@ function absorbShieldHit(x, y) {
         });
     }
 
-    createExplosion(x, y, 10, '#66ccff');
+    // Shield explosion destroys nearby threats
+    const blastRadius = 120;
+    for (let i = asteroids.length - 1; i >= 0; i--) {
+        if (dist(x, y, asteroids[i].x, asteroids[i].y) < blastRadius) {
+            destroyAsteroid(i, '#44aaff');
+        }
+    }
+    for (let i = enemyBullets.length - 1; i >= 0; i--) {
+        if (dist(x, y, enemyBullets[i].x, enemyBullets[i].y) < blastRadius) {
+            createExplosion(enemyBullets[i].x, enemyBullets[i].y, 4, '#66ccff');
+            enemyBullets.splice(i, 1);
+        }
+    }
+
+    createExplosion(x, y, 16, '#66ccff');
     return true;
 }
 
