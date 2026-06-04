@@ -48,14 +48,13 @@ const PICKUP_MIN_SPAWN = 10 * 60;
 const PICKUP_MAX_SPAWN = 22 * 60;
 const PICKUP_LIFE = 8 * 60;
 const PICKUP_RADIUS = 20;
-const LASER_ENERGY_MAX = 25;
+const LASER_ENERGY_MAX = 180;
 const PULSE_SHOTS = 5;
 const HOMING_SHOTS = 5;
 const PULSE_RADIUS = 200;
 const PULSE_SPEED = 16;
 const MISSILE_SPEED = 5.5;
 const MISSILE_TURN_SPEED = 0.09;
-const MISSILE_LIFE = 180;
 const ENEMY_BULLET_SPEED = 4;
 const RED_ENEMY_BULLET_SPEED = 5;
 const ENEMY_BULLET_LIFE = 90;
@@ -1676,7 +1675,6 @@ function createHomingMissile(ship) {
         dx: Math.cos(ship.angle) * MISSILE_SPEED + ship.dx * 0.4,
         dy: Math.sin(ship.angle) * MISSILE_SPEED + ship.dy * 0.4,
         angle: ship.angle,
-        life: MISSILE_LIFE,
         radius: 8
     };
 }
@@ -2031,7 +2029,6 @@ function updateMissiles() {
         missile.dy = Math.sin(missile.angle) * MISSILE_SPEED;
         missile.x += missile.dx;
         missile.y += missile.dy;
-        missile.life--;
         wrap(missile);
 
         particles.push({
@@ -2074,6 +2071,9 @@ function updateMissiles() {
             if (dist(missile.x, missile.y, enemyBullets[j].x, enemyBullets[j].y) < missile.radius + enemyBullets[j].radius) {
                 createExplosion(enemyBullets[j].x, enemyBullets[j].y, 4, '#ff8844');
                 enemyBullets.splice(j, 1);
+                missiles.splice(i, 1);
+                hit = true;
+                break;
             }
         }
 
@@ -2084,10 +2084,6 @@ function updateMissiles() {
             createExplosion(missile.x, missile.y, hitLanded ? 10 : 6, hitLanded ? '#ff9d74' : '#ffd7e8');
             missiles.splice(i, 1);
             continue;
-        }
-
-        if (missile.life <= 0) {
-            missiles.splice(i, 1);
         }
     }
 }
@@ -2150,19 +2146,19 @@ function updateLaserBeam(ship, firePressed) {
     }
 
     if (!firePressed) {
-        weapon.energy = Math.min(LASER_ENERGY_MAX, weapon.energy + 1);
         stopLaserHum();
         return false;
     }
 
     if (weapon.energy <= 0) {
+        ship.specialWeapon = createSpecialWeapon(null);
         stopLaserHum();
         return false;
     }
 
     const gunTip = getGunTipPosition(ship);
     const beamEnd = getBeamEndpoint(gunTip.x, gunTip.y, ship.angle);
-    weapon.energy--;
+    weapon.energy = Math.max(0, weapon.energy - 1);
     ship.shootAnim = Math.max(ship.shootAnim, 2);
     laserBeam = {
         x1: gunTip.x,
@@ -2218,6 +2214,10 @@ function updateLaserBeam(ship, firePressed) {
             createExplosion(enemyBullets[j].x, enemyBullets[j].y, 4, '#66e6ff');
             enemyBullets.splice(j, 1);
         }
+    }
+
+    if (weapon.energy <= 0) {
+        ship.specialWeapon = createSpecialWeapon(null);
     }
 
     return true;
@@ -2948,7 +2948,7 @@ function drawSpecialWeaponHud() {
 
         if (type === 'laser') {
             const energyRatio = weapon.energy / LASER_ENERGY_MAX;
-            ctx.fillText(`${(weapon.energy / 60).toFixed(1)}s charge`, panelX + 48, panelY + 52);
+            ctx.fillText(`${(weapon.energy / 60).toFixed(1)}s left`, panelX + 48, panelY + 52);
             ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
             ctx.fillRect(panelX + 148, panelY + 24, 68, 12);
             ctx.fillStyle = '#66e6ff';
