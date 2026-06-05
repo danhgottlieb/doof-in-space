@@ -1675,7 +1675,8 @@ function createHomingMissile(ship) {
         dx: Math.cos(ship.angle) * MISSILE_SPEED + ship.dx * 0.4,
         dy: Math.sin(ship.angle) * MISSILE_SPEED + ship.dy * 0.4,
         angle: ship.angle,
-        radius: 8
+        radius: 8,
+        life: 600 // 10 seconds max
     };
 }
 
@@ -2033,6 +2034,13 @@ function updatePulseWaves() {
 function updateMissiles() {
     for (let i = missiles.length - 1; i >= 0; i--) {
         const missile = missiles[i];
+        missile.life--;
+        // Generous timeout: 10 seconds, then self-destruct
+        if (missile.life <= 0) {
+            createExplosion(missile.x, missile.y, 4, '#ff8844');
+            missiles.splice(i, 1);
+            continue;
+        }
         const target = getClosestTarget(missile.x, missile.y);
 
         if (target) {
