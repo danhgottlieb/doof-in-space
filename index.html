@@ -48,7 +48,8 @@ const PICKUP_MIN_SPAWN = 10 * 60;
 const PICKUP_MAX_SPAWN = 22 * 60;
 const PICKUP_LIFE = 8 * 60;
 const PICKUP_RADIUS = 20;
-const LASER_ENERGY_MAX = 180;
+const LASER_ENERGY_MAX = 30;
+const LASER_TOTAL_AMMO = 180;
 const PULSE_SHOTS = 5;
 const HOMING_SHOTS = 5;
 const PULSE_RADIUS = 200;
@@ -1177,7 +1178,7 @@ function renderTitlePromptCanvas(drawWidth, drawHeight, promptSize, hintSize, ti
 
     smallCtx.font = `bold ${hintFontSize}px "Courier New", monospace`;
     smallCtx.fillStyle = '#c7dcff';
-    drawSpacedText('Arrow keys / WASD to steer • Space to fire • P to pause', centerX, hintY, Math.max(0.4, hintFontSize * 0.03), 'fill', smallCtx);
+    drawSpacedText('Arrows/WASD steer • Space fire • P paws', centerX, hintY, Math.max(0.25, hintFontSize * 0.02), 'fill', smallCtx);
 
     return smallCanvas;
 }
@@ -1608,7 +1609,7 @@ function scheduleNextPickupSpawn() {
 }
 
 function createSpecialWeapon(type = null) {
-    if (type === 'laser') return { type, ammo: 0, energy: LASER_ENERGY_MAX };
+    if (type === 'laser') return { type: 'laser', ammo: LASER_TOTAL_AMMO, energy: LASER_ENERGY_MAX };
     if (type === 'pulse') return { type, ammo: PULSE_SHOTS, energy: 0 };
     if (type === 'homing') return { type, ammo: HOMING_SHOTS, energy: 0 };
     return { type: null, ammo: 0, energy: 0 };
@@ -2171,20 +2172,27 @@ function updateLaserBeam(ship, firePressed) {
         return false;
     }
 
+    if (weapon.ammo <= 0) {
+        ship.specialWeapon = createSpecialWeapon(null);
+        stopLaserHum();
+        return false;
+    }
+
     if (!firePressed) {
+        weapon.energy = Math.min(LASER_ENERGY_MAX, weapon.energy + 0.5);
         stopLaserHum();
         return false;
     }
 
     if (weapon.energy <= 0) {
-        ship.specialWeapon = createSpecialWeapon(null);
         stopLaserHum();
         return false;
     }
 
     const gunTip = getGunTipPosition(ship);
     const beamEnd = getBeamEndpoint(gunTip.x, gunTip.y, ship.angle);
-    weapon.energy = Math.max(0, weapon.energy - 1);
+    weapon.energy--;
+    weapon.ammo--;
     ship.shootAnim = Math.max(ship.shootAnim, 2);
     laserBeam = {
         x1: gunTip.x,
@@ -2242,7 +2250,7 @@ function updateLaserBeam(ship, firePressed) {
         }
     }
 
-    if (weapon.energy <= 0) {
+    if (weapon.ammo <= 0) {
         ship.specialWeapon = createSpecialWeapon(null);
     }
 
@@ -2975,12 +2983,15 @@ function drawSpecialWeaponHud() {
         ctx.font = '13px monospace';
 
         if (type === 'laser') {
-            const energyRatio = weapon.energy / LASER_ENERGY_MAX;
-            ctx.fillText(`${(weapon.energy / 60).toFixed(1)}s left`, panelX + 48, panelY + 52);
+            const energyRatio = Math.max(0, Math.min(1, weapon.energy / LASER_ENERGY_MAX));
+            const totalRatio = Math.max(0, Math.min(1, weapon.ammo / LASER_TOTAL_AMMO));
+            ctx.fillText(`${(weapon.ammo / 60).toFixed(1)}s`, panelX + 48, panelY + 52);
             ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
             ctx.fillRect(panelX + 148, panelY + 24, 68, 12);
+            ctx.fillStyle = 'rgba(80, 148, 255, 0.4)';
+            ctx.fillRect(panelX + 148, panelY + 24, 68 * totalRatio, 12);
             ctx.fillStyle = '#66e6ff';
-            ctx.fillRect(panelX + 148, panelY + 24, 68 * energyRatio, 12);
+            ctx.fillRect(panelX + 148, panelY + 27, 68 * energyRatio, 6);
             ctx.strokeStyle = 'rgba(215, 251, 255, 0.85)';
             ctx.strokeRect(panelX + 148, panelY + 24, 68, 12);
         } else {
@@ -3876,11 +3887,11 @@ function draw() {
         ctx.fillStyle = '#ffe066';
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 3;
-        ctx.strokeText('PAUSED', canvas.width / 2, canvas.height / 2);
-        ctx.fillText('PAUSED', canvas.width / 2, canvas.height / 2);
+        ctx.strokeText('PAWS', canvas.width / 2, canvas.height / 2);
+        ctx.fillText('PAWS', canvas.width / 2, canvas.height / 2);
         ctx.font = '20px "Courier New", monospace';
         ctx.fillStyle = '#ccc';
-        ctx.fillText('Press P or ESC to resume', canvas.width / 2, canvas.height / 2 + 50);
+        ctx.fillText('Press P or ESC to unpaws', canvas.width / 2, canvas.height / 2 + 50);
         ctx.restore();
     }
 }
