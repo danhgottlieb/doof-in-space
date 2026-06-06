@@ -196,6 +196,11 @@ resize();
 
 // Game state
 let gameState = 'title';
+let difficulty = 'hard';
+const DIFFICULTY_OPTIONS = [
+    { label: 'EASY', value: 'easy', detail: 'Extra armor • Infinite weapons • Fewer asteroids' },
+    { label: 'HARD', value: 'hard', detail: 'Classic mode • One hit kills • Limited weapons' }
+];
 let ship = null, asteroids = [], bullets = [], particles = [], pickups = [], pulseWaves = [], missiles = [], enemies = [], enemyBullets = [], enemyExplosions = [], score = 0, lives = 0, level = 1, gameOver = false;
 let highScore = parseInt(localStorage.getItem('asteroids_high') || '0');
 let respawnTimer = 0;
@@ -208,6 +213,7 @@ let ejectedPug = null; // floating pug revealed as the ship explosion fades
 let shipExplosion = null; // big cartoon explosion layered over the ejected pug
 let screenShakeTimer = 0;
 let shieldFlashTimer = 0;
+let hpFlashTimer = 0;
 let gameOverTimer = 0;
 let enemiesRemaining = 0;
 let enemySpawnTimer = 0;
@@ -225,6 +231,7 @@ let konamiProgress = 0;
 let levelSelectActive = false;
 const LEVEL_SELECT_MAX_LEVEL = 20;
 let levelSelectChoice = 0;
+let difficultySelectChoice = 1;
 
 function getLevelSelectEntries() {
     const entries = [];
@@ -254,6 +261,9 @@ function launchLevelSelectEntry(entry) {
     if (!entry) return;
 
     levelSelectActive = false;
+    keys['Space'] = false;
+    keys['Enter'] = false;
+    titleFrameCache = null;
     initGame();
     level = entry.level;
     asteroids = spawnAsteroids(STARTING_ASTEROIDS + level - 1);
@@ -264,15 +274,31 @@ function launchLevelSelectEntry(entry) {
     }
 }
 
+function startDifficultySelect() {
+    difficultySelectChoice = difficulty === 'easy' ? 0 : 1;
+    gameState = 'difficultySelect';
+    keys['Space'] = false;
+    keys['Enter'] = false;
+    titleFrameCache = null;
+}
+
+function confirmDifficultySelection() {
+    const selected = DIFFICULTY_OPTIONS[difficultySelectChoice] || DIFFICULTY_OPTIONS[1];
+    difficulty = selected.value;
+    keys['Space'] = false;
+    keys['Enter'] = false;
+    titleFrameCache = null;
+    initGame();
+}
 
 // Input
 const keys = {};
 let paused = false;
 window.addEventListener('keydown', e => {
     keys[e.code] = true;
-    if(e.code === 'Space') e.preventDefault();
+    if (['Space', 'ArrowUp', 'ArrowDown', 'Enter'].includes(e.code)) e.preventDefault();
     // Start title music on first interaction (retry if browser blocked it)
-    if (gameState === 'title') {
+    if (gameState === 'title' || gameState === 'difficultySelect') {
         if (!currentMusic) {
             switchMusic(titleMusic);
         } else if (currentMusic === titleMusic && titleMusic.paused) {
@@ -311,6 +337,23 @@ window.addEventListener('keydown', e => {
         }
         if (e.code === 'Escape') levelSelectActive = false;
     }
+    if (gameState === 'title' && !levelSelectActive && (e.code === 'Enter' || e.code === 'Space')) {
+        startDifficultySelect();
+    }
+    if (gameState === 'difficultySelect') {
+        if (e.code === 'ArrowUp' || e.code === 'ArrowDown') {
+            difficultySelectChoice = difficultySelectChoice === 0 ? 1 : 0;
+        }
+        if (e.code === 'Enter' || e.code === 'Space') {
+            confirmDifficultySelection();
+        }
+        if (e.code === 'Escape') {
+            gameState = 'title';
+            keys['Space'] = false;
+            keys['Enter'] = false;
+            titleFrameCache = null;
+        }
+    }
     // Pause toggle
     if ((e.code === 'KeyP' || e.code === 'Escape') && ['playing', 'boss', 'bossIntro', 'bossDefeated'].includes(gameState)) {
         paused = !paused;
@@ -325,12 +368,12 @@ window.addEventListener('keydown', e => {
 });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
 window.addEventListener('click', () => {
-    if (gameState === 'title' && !currentMusic) switchMusic(titleMusic);
+    if ((gameState === 'title' || gameState === 'difficultySelect') && !currentMusic) switchMusic(titleMusic);
     if (currentMusic && currentMusic.paused) currentMusic.play().catch(() => {});
 }, { once: true });
 // Also try on pointerdown and mousedown for faster music start
 window.addEventListener('pointerdown', () => {
-    if (gameState === 'title' && !currentMusic) switchMusic(titleMusic);
+    if ((gameState === 'title' || gameState === 'difficultySelect') && !currentMusic) switchMusic(titleMusic);
     if (currentMusic && currentMusic.paused) currentMusic.play().catch(() => {});
 }, { once: true });
 
@@ -350,16 +393,22 @@ function createShip(invincible = false) {
         invincible: invincible ? SHIP_INVINCIBLE_TIME : 0,
         shootCooldown: 0,
         shootAnim: 0,
+        hitPoints: difficulty === 'easy' ? 2 : 1,
+        hitFlash: 0,
         radius: SHIP_SIZE,
         shield: false,
         specialWeapon: { type: null, ammo: 0, energy: 0 }
     };
 }
 
+function getAsteroidSpeed() {
+    return difficulty === 'easy' ? ASTEROID_SPEED * 0.75 : ASTEROID_SPEED;
+}
+
 // Asteroids
 function createAsteroid(x, y, size) {
     const angle = Math.random() * Math.PI * 2;
-    const speed = ASTEROID_SPEED * (3 / size) * (0.5 + Math.random() * 0.5);
+    const speed = getAsteroidSpeed() * (3 / size) * (0.5 + Math.random() * 0.5);
     const vertices = [];
     for (let i = 0; i < ASTEROID_VERTICES; i++) {
         vertices.push(1 + Math.random() * ASTEROID_JAG * 2 - ASTEROID_JAG);
@@ -378,7 +427,8 @@ function createAsteroid(x, y, size) {
 
 function spawnAsteroids(count) {
     const arr = [];
-    for (let i = 0; i < count; i++) {
+    const spawnCount = difficulty === 'easy' ? Math.max(2, Math.floor(count * 0.7)) : count;
+    for (let i = 0; i < spawnCount; i++) {
         let x, y;
         do {
             x = Math.random() * canvas.width;
@@ -1431,6 +1481,28 @@ function playShieldBreakSound() {
     }
 }
 
+function playPlayerHitSound() {
+    playTone({
+        type: 'square',
+        frequency: 320,
+        frequencyEnd: 140,
+        duration: 0.12,
+        volume: 0.1,
+        attack: 0.001,
+        release: 0.08
+    });
+    playTone({
+        type: 'triangle',
+        frequency: 180,
+        frequencyEnd: 90,
+        duration: 0.18,
+        volume: 0.08,
+        attack: 0.001,
+        release: 0.1,
+        when: 0.02
+    });
+}
+
 function playExplosionSound() {
     playTone({
         type: 'sine',
@@ -1605,7 +1677,9 @@ function stopThruster() {
 }
 
 function scheduleNextPickupSpawn() {
-    pickupSpawnTimer = PICKUP_MIN_SPAWN + Math.floor(Math.random() * (PICKUP_MAX_SPAWN - PICKUP_MIN_SPAWN + 1));
+    const minSpawn = difficulty === 'easy' ? PICKUP_MIN_SPAWN * 0.5 : PICKUP_MIN_SPAWN;
+    const maxSpawn = difficulty === 'easy' ? PICKUP_MAX_SPAWN * 0.5 : PICKUP_MAX_SPAWN;
+    pickupSpawnTimer = Math.floor(minSpawn + Math.random() * (maxSpawn - minSpawn + 1));
 }
 
 function createSpecialWeapon(type = null) {
@@ -1836,6 +1910,7 @@ function destroyPlayerShip() {
     };
     screenShakeTimer = Math.max(screenShakeTimer, 14);
     lives--;
+    hpFlashTimer = 0;
     laserBeam = null;
     missiles = []; // Clear player missiles on death
     pulseWaves = [];
@@ -1934,6 +2009,26 @@ function absorbShieldHit(x, y) {
     return true;
 }
 
+function damagePlayerShip(hitX = ship ? ship.x : 0, hitY = ship ? ship.y : 0) {
+    if (!ship) return false;
+
+    if (difficulty === 'easy' && ship.hitPoints > 1) {
+        ship.hitPoints--;
+        ship.invincible = 120;
+        ship.hitFlash = 24;
+        hpFlashTimer = 24;
+        screenShakeTimer = Math.max(screenShakeTimer, 10);
+        laserBeam = null;
+        stopLaserHum();
+        playPlayerHitSound();
+        createExplosion(hitX, hitY, 12, '#ff6b7d');
+        return false;
+    }
+
+    destroyPlayerShip();
+    return true;
+}
+
 function handleEnemyBulletShipCollisions() {
     if (!ship || gameState === 'bossDefeated') return false;
 
@@ -1944,7 +2039,7 @@ function handleEnemyBulletShipCollisions() {
             if (absorbShieldHit(ship.x, ship.y)) {
                 return true;
             }
-            destroyPlayerShip();
+            damagePlayerShip(bullet.x, bullet.y);
             return true;
         }
     }
@@ -2192,7 +2287,7 @@ function updateLaserBeam(ship, firePressed) {
     const gunTip = getGunTipPosition(ship);
     const beamEnd = getBeamEndpoint(gunTip.x, gunTip.y, ship.angle);
     weapon.energy--;
-    weapon.ammo--;
+    if (difficulty !== 'easy') weapon.ammo--;
     ship.shootAnim = Math.max(ship.shootAnim, 2);
     laserBeam = {
         x1: gunTip.x,
@@ -2250,7 +2345,7 @@ function updateLaserBeam(ship, firePressed) {
         }
     }
 
-    if (weapon.ammo <= 0) {
+    if (difficulty !== 'easy' && weapon.ammo <= 0) {
         ship.specialWeapon = createSpecialWeapon(null);
     }
 
@@ -2314,6 +2409,7 @@ function initGame() {
     shipExplosion = null;
     screenShakeTimer = 0;
     shieldFlashTimer = 0;
+    hpFlashTimer = 0;
     gameOverTimer = 0;
     enemiesRemaining = 0;
     enemySpawnTimer = 0;
@@ -2339,11 +2435,15 @@ function nextLevel() {
     laserBeam = null;
     screenShakeTimer = 0;
     shieldFlashTimer = 0;
+    hpFlashTimer = 0;
     levelTransitionTimer = 0;
     levelTransitionActive = false;
     resetBossState();
 
-    if (ship) ship.shield = false;
+    if (ship) {
+        ship.shield = false;
+        if (difficulty === 'easy') ship.hitPoints = 2;
+    }
 
     // Enemies enter from the side at unpredictable times (not all at once)
     resetEnemyWaveForLevel(level);
@@ -2354,9 +2454,6 @@ function nextLevel() {
 
 function updateTitleScreen() {
     updateTitleAsteroids();
-    if (!levelSelectActive && (keys['Enter'] || keys['Space'])) {
-        initGame();
-    }
 }
 
 // Update
@@ -2364,7 +2461,7 @@ function update() {
     if (paused) return;
     const firePressed = keys['Space'] || keys['KeyF'];
 
-    if (gameState === 'title') {
+    if (gameState === 'title' || gameState === 'difficultySelect') {
         laserBeam = null;
         stopLaserHum();
         stopThruster();
@@ -2408,6 +2505,7 @@ function update() {
     if (pickupSpawnTimer > 0) pickupSpawnTimer--;
     if (screenShakeTimer > 0) screenShakeTimer--;
     if (shieldFlashTimer > 0) shieldFlashTimer--;
+    if (hpFlashTimer > 0) hpFlashTimer--;
 
     if (gameState === 'bossIntro') {
         laserBeam = null;
@@ -2518,6 +2616,7 @@ function update() {
     if (ship.invincible > 0) ship.invincible--;
     if (ship.shootCooldown > 0) ship.shootCooldown--;
     if (ship.shootAnim > 0) ship.shootAnim--;
+    if (ship.hitFlash > 0) ship.hitFlash--;
 
     updatePickups();
     handlePickupCollection(ship);
@@ -2533,18 +2632,18 @@ function update() {
 
         if (weapon && weapon.type === 'pulse' && justPressedFire && weapon.ammo > 0) {
             pulseWaves.push(createPulseWave(ship));
-            weapon.ammo--;
+            if (difficulty !== 'easy') weapon.ammo--;
             ship.shootAnim = 12;
             playPulseSound();
-            if (weapon.ammo <= 0) {
+            if (difficulty !== 'easy' && weapon.ammo <= 0) {
                 ship.specialWeapon = createSpecialWeapon();
             }
         } else if (weapon && weapon.type === 'homing' && justPressedFire && weapon.ammo > 0) {
             missiles.push(createHomingMissile(ship));
-            weapon.ammo--;
+            if (difficulty !== 'easy') weapon.ammo--;
             ship.shootAnim = 12;
             playMissileSound();
-            if (weapon.ammo <= 0) {
+            if (difficulty !== 'easy' && weapon.ammo <= 0) {
                 ship.specialWeapon = createSpecialWeapon();
             }
         } else if ((!weapon || weapon.type === null) && firePressed && ship.shootCooldown <= 0 && bullets.length < MAX_BULLETS) {
@@ -2588,7 +2687,7 @@ function update() {
             for (let j = asteroids.length - 1; j >= 0; j--) {
                 if (dist(ship.x, ship.y, asteroids[j].x, asteroids[j].y) < ship.radius + asteroids[j].radius * 0.7) {
                     if (!absorbShieldHit(ship.x, ship.y)) {
-                        destroyPlayerShip();
+                        damagePlayerShip(ship.x, ship.y);
                     }
                     break;
                 }
@@ -2601,7 +2700,7 @@ function update() {
                 boss.pushBackVx += Math.cos(angle) * 2.2;
                 boss.pushBackVy += Math.sin(angle) * 2.2;
             } else {
-                destroyPlayerShip();
+                damagePlayerShip(ship.x, ship.y);
             }
         }
     }
@@ -2962,6 +3061,7 @@ function drawSpecialWeaponHud() {
     const panelY = 52;
     const panelWidth = 230;
     const panelHeight = 58;
+    const infiniteAmmo = difficulty === 'easy';
 
     ctx.save();
     ctx.fillStyle = 'rgba(5, 10, 22, 0.72)';
@@ -2984,8 +3084,8 @@ function drawSpecialWeaponHud() {
 
         if (type === 'laser') {
             const energyRatio = Math.max(0, Math.min(1, weapon.energy / LASER_ENERGY_MAX));
-            const totalRatio = Math.max(0, Math.min(1, weapon.ammo / LASER_TOTAL_AMMO));
-            ctx.fillText(`${(weapon.ammo / 60).toFixed(1)}s`, panelX + 48, panelY + 52);
+            const totalRatio = infiniteAmmo ? 1 : Math.max(0, Math.min(1, weapon.ammo / LASER_TOTAL_AMMO));
+            ctx.fillText(infiniteAmmo ? '∞ ammo' : `${(weapon.ammo / 60).toFixed(1)}s`, panelX + 48, panelY + 52);
             ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
             ctx.fillRect(panelX + 148, panelY + 24, 68, 12);
             ctx.fillStyle = 'rgba(80, 148, 255, 0.4)';
@@ -2995,7 +3095,7 @@ function drawSpecialWeaponHud() {
             ctx.strokeStyle = 'rgba(215, 251, 255, 0.85)';
             ctx.strokeRect(panelX + 148, panelY + 24, 68, 12);
         } else {
-            ctx.fillText(`${weapon.ammo} shots`, panelX + 48, panelY + 52);
+            ctx.fillText(infiniteAmmo ? '∞ shots' : `${weapon.ammo} shots`, panelX + 48, panelY + 52);
         }
     } else {
         ctx.fillStyle = '#8aa0bf';
@@ -3005,6 +3105,42 @@ function drawSpecialWeaponHud() {
         ctx.fillText('Collect glowing pickups', panelX + 48, panelY + 52);
     }
 
+    ctx.restore();
+}
+
+function drawDifficultyBadge() {
+    ctx.save();
+    ctx.textAlign = 'right';
+    ctx.font = 'bold 14px monospace';
+    ctx.fillStyle = difficulty === 'easy' ? '#7dffb3' : '#ff8fa6';
+    ctx.fillText(difficulty.toUpperCase(), canvas.width - 20, 56);
+    ctx.restore();
+}
+
+function drawHitPointHud() {
+    if (difficulty !== 'easy') return;
+
+    const hp = ship ? ship.hitPoints : 0;
+    const flashing = hpFlashTimer > 0 && Math.floor(hpFlashTimer / 4) % 2 === 0;
+    const baseX = 20;
+    const baseY = 156;
+
+    ctx.save();
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 16px monospace';
+    ctx.fillStyle = flashing ? '#ff5566' : '#ffd6dd';
+    ctx.fillText(`HP: ${ship ? ship.hitPoints : '--'}`, baseX, baseY);
+
+    for (let i = 0; i < 2; i++) {
+        const active = i < hp;
+        const pipX = baseX + 56 + i * 18;
+        const pipY = baseY - 12;
+        ctx.fillStyle = active ? (flashing ? '#ff4458' : '#ff7f96') : 'rgba(255, 255, 255, 0.12)';
+        ctx.strokeStyle = active ? 'rgba(255, 235, 240, 0.95)' : 'rgba(255, 255, 255, 0.2)';
+        ctx.lineWidth = 1.5;
+        ctx.fillRect(pipX, pipY, 12, 12);
+        ctx.strokeRect(pipX, pipY, 12, 12);
+    }
     ctx.restore();
 }
 
@@ -3568,6 +3704,62 @@ function drawTitleScreen() {
     ctx.imageSmoothingEnabled = true;
 }
 
+function drawDifficultySelectOverlay() {
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.82)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    ctx.fillStyle = '#ffe066';
+    ctx.font = 'bold 46px Impact, Haettenschweiler, "Arial Black", sans-serif';
+    ctx.fillText('SELECT DIFFICULTY', centerX, canvas.height * 0.18);
+
+    ctx.font = '20px "Courier New", monospace';
+    ctx.fillStyle = '#a9d7ff';
+    ctx.fillText('Choose how rough this mission gets', centerX, canvas.height * 0.26);
+
+    for (let i = 0; i < DIFFICULTY_OPTIONS.length; i++) {
+        const option = DIFFICULTY_OPTIONS[i];
+        const isSelected = i === difficultySelectChoice;
+        const y = centerY - 34 + i * 104;
+
+        ctx.save();
+        ctx.globalAlpha = isSelected ? 1 : 0.5;
+        ctx.fillStyle = isSelected ? 'rgba(20, 36, 70, 0.9)' : 'rgba(8, 14, 28, 0.72)';
+        ctx.strokeStyle = isSelected
+            ? (option.value === 'easy' ? 'rgba(125, 255, 179, 0.9)' : 'rgba(255, 143, 166, 0.9)')
+            : 'rgba(140, 180, 255, 0.2)';
+        ctx.lineWidth = isSelected ? 3 : 1.5;
+        ctx.fillRect(centerX - 265, y - 34, 530, 68);
+        ctx.strokeRect(centerX - 265, y - 34, 530, 68);
+
+        ctx.font = isSelected
+            ? 'bold 52px Impact, Haettenschweiler, "Arial Black", sans-serif'
+            : 'bold 40px Impact, Haettenschweiler, "Arial Black", sans-serif';
+        ctx.fillStyle = option.value === 'easy' ? '#7dffb3' : '#ff8fa6';
+        if (isSelected) {
+            ctx.shadowColor = option.value === 'easy' ? 'rgba(125, 255, 179, 0.85)' : 'rgba(255, 143, 166, 0.85)';
+            ctx.shadowBlur = 18;
+        }
+        ctx.fillText(option.label, centerX, y - 6);
+
+        ctx.shadowBlur = 0;
+        ctx.font = '18px "Courier New", monospace';
+        ctx.fillStyle = isSelected ? '#f8fbff' : '#a7b9d8';
+        ctx.fillText(option.detail, centerX, y + 28);
+        ctx.restore();
+    }
+
+    ctx.fillStyle = '#b8c7e2';
+    ctx.font = '18px "Courier New", monospace';
+    ctx.fillText('↑/↓ choose • SPACE/ENTER confirm • ESC back', centerX, canvas.height * 0.84);
+    ctx.restore();
+}
+
 // Draw
 let frameCount = 0;
 function draw() {
@@ -3597,7 +3789,7 @@ function draw() {
         return;
     }
 
-    if (gameState === 'title' && titleFrameCache && frameCount % 2 === 1) {
+    if ((gameState === 'title' || gameState === 'difficultySelect') && titleFrameCache && frameCount % 2 === 1) {
         ctx.drawImage(titleFrameCache, 0, 0);
         return;
     }
@@ -3613,14 +3805,14 @@ function draw() {
         const s = stars[i];
         const twinkle = 0.5 + Math.sin(frameCount * s.twinkleSpeed + i) * 0.5;
         const alpha = s.brightness * twinkle * 0.5;
-        const starX = gameState === 'title' ? s.x + Math.sin(time * 0.1 + i) * 2 : s.x;
+        const starX = (gameState === 'title' || gameState === 'difficultySelect') ? s.x + Math.sin(time * 0.1 + i) * 2 : s.x;
         ctx.fillStyle = `rgba(255,255,255,${alpha})`;
         ctx.beginPath();
         ctx.arc(starX, s.y, s.size, 0, Math.PI * 2);
         ctx.fill();
     }
 
-    if (gameState === 'title') {
+    if (gameState === 'title' || gameState === 'difficultySelect') {
         drawTitleScreen();
         if (levelSelectActive) {
             const levelEntries = getLevelSelectEntries();
@@ -3666,6 +3858,8 @@ function draw() {
             ctx.font = '18px "Courier New", monospace';
             ctx.fillText('↑/↓ choose • ENTER start • B jumps to boss from level 3/6/9... • ESC cancel', canvas.width / 2, canvas.height * 0.81);
             ctx.restore();
+        } else if (gameState === 'difficultySelect') {
+            drawDifficultySelectOverlay();
         }
         if (!titleFrameCache || titleFrameCache.width !== canvas.width || titleFrameCache.height !== canvas.height) {
             titleFrameCache = document.createElement('canvas');
@@ -3790,12 +3984,14 @@ function draw() {
 
     ctx.textAlign = 'right';
     ctx.fillText(`HIGH: ${highScore}`, canvas.width - 20, 35);
+    drawDifficultyBadge();
 
     for (let i = 0; i < lives; i++) {
         const lx = 30 + i * 35;
         const ly = 132;
         ctx.drawImage(shipImg, lx - 15, ly - 10, 30, 21);
     }
+    drawHitPointHud();
 
     ctx.textAlign = 'center';
     ctx.font = '14px monospace';
