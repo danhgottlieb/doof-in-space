@@ -171,6 +171,14 @@ function generateBackground() {
     }
 }
 
+// Game state (must be before resize() which calls generateTitleAsteroids → getAsteroidSpeed)
+let gameState = 'title';
+let difficulty = 'hard';
+const DIFFICULTY_OPTIONS = [
+    { label: 'EASY', value: 'easy', detail: 'Extra armor • Infinite weapons • Fewer asteroids' },
+    { label: 'HARD', value: 'hard', detail: 'Classic mode • One hit kills • Limited weapons' }
+];
+
 // Regenerate background on resize
 const originalResize = resize;
 window.removeEventListener('resize', originalResize);
@@ -193,14 +201,6 @@ resize = function() {
 };
 window.addEventListener('resize', resize);
 resize();
-
-// Game state
-let gameState = 'title';
-let difficulty = 'hard';
-const DIFFICULTY_OPTIONS = [
-    { label: 'EASY', value: 'easy', detail: 'Extra armor • Infinite weapons • Fewer asteroids' },
-    { label: 'HARD', value: 'hard', detail: 'Classic mode • One hit kills • Limited weapons' }
-];
 let ship = null, asteroids = [], bullets = [], particles = [], pickups = [], pulseWaves = [], missiles = [], enemies = [], enemyBullets = [], enemyExplosions = [], score = 0, lives = 0, level = 1, gameOver = false;
 let highScore = parseInt(localStorage.getItem('asteroids_high') || '0');
 let respawnTimer = 0;
