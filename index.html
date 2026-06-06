@@ -1836,6 +1836,8 @@ function destroyPlayerShip() {
     screenShakeTimer = Math.max(screenShakeTimer, 14);
     lives--;
     laserBeam = null;
+    missiles = []; // Clear player missiles on death
+    pulseWaves = [];
     playExplosionSound();
     setTimeout(() => playDeathJingle(), 300);
     switchMusic(null);
@@ -2698,6 +2700,8 @@ function updateEnemyBullets() {
 }
 
 function updateParticles() {
+    // Cap particles to prevent performance issues
+    if (particles.length > 500) particles.splice(0, particles.length - 500);
     for (let i = particles.length - 1; i >= 0; i--) {
         particles[i].x += particles[i].dx;
         particles[i].y += particles[i].dy;
