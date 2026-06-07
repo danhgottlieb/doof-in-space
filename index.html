@@ -175,8 +175,8 @@ function generateBackground() {
 let gameState = 'title';
 let difficulty = 'hard';
 const DIFFICULTY_OPTIONS = [
-    { label: 'EASY', value: 'easy', detail: 'Extra armor • Infinite weapons • Fewer asteroids' },
-    { label: 'HARD', value: 'hard', detail: 'Classic mode • One hit kills • Limited weapons' }
+    { label: 'EASY', value: 'easy' },
+    { label: 'HARD', value: 'hard' }
 ];
 
 // Regenerate background on resize
@@ -1682,9 +1682,10 @@ function scheduleNextPickupSpawn() {
 }
 
 function createSpecialWeapon(type = null) {
-    if (type === 'laser') return { type: 'laser', ammo: LASER_TOTAL_AMMO, energy: LASER_ENERGY_MAX };
-    if (type === 'pulse') return { type, ammo: PULSE_SHOTS, energy: 0 };
-    if (type === 'homing') return { type, ammo: HOMING_SHOTS, energy: 0 };
+    const mult = difficulty === 'easy' ? 2 : 1;
+    if (type === 'laser') return { type: 'laser', ammo: LASER_TOTAL_AMMO * mult, energy: LASER_ENERGY_MAX };
+    if (type === 'pulse') return { type, ammo: PULSE_SHOTS * mult, energy: 0 };
+    if (type === 'homing') return { type, ammo: HOMING_SHOTS * mult, energy: 0 };
     return { type: null, ammo: 0, energy: 0 };
 }
 
@@ -2286,7 +2287,7 @@ function updateLaserBeam(ship, firePressed) {
     const gunTip = getGunTipPosition(ship);
     const beamEnd = getBeamEndpoint(gunTip.x, gunTip.y, ship.angle);
     weapon.energy--;
-    if (difficulty !== 'easy') weapon.ammo--;
+    weapon.ammo--;
     ship.shootAnim = Math.max(ship.shootAnim, 2);
     laserBeam = {
         x1: gunTip.x,
@@ -2344,7 +2345,7 @@ function updateLaserBeam(ship, firePressed) {
         }
     }
 
-    if (difficulty !== 'easy' && weapon.ammo <= 0) {
+    if (weapon.ammo <= 0) {
         ship.specialWeapon = createSpecialWeapon(null);
     }
 
@@ -2631,18 +2632,18 @@ function update() {
 
         if (weapon && weapon.type === 'pulse' && justPressedFire && weapon.ammo > 0) {
             pulseWaves.push(createPulseWave(ship));
-            if (difficulty !== 'easy') weapon.ammo--;
+            weapon.ammo--;
             ship.shootAnim = 12;
             playPulseSound();
-            if (difficulty !== 'easy' && weapon.ammo <= 0) {
+            if (weapon.ammo <= 0) {
                 ship.specialWeapon = createSpecialWeapon();
             }
         } else if (weapon && weapon.type === 'homing' && justPressedFire && weapon.ammo > 0) {
             missiles.push(createHomingMissile(ship));
-            if (difficulty !== 'easy') weapon.ammo--;
+            weapon.ammo--;
             ship.shootAnim = 12;
             playMissileSound();
-            if (difficulty !== 'easy' && weapon.ammo <= 0) {
+            if (weapon.ammo <= 0) {
                 ship.specialWeapon = createSpecialWeapon();
             }
         } else if ((!weapon || weapon.type === null) && firePressed && ship.shootCooldown <= 0 && bullets.length < MAX_BULLETS) {
@@ -3060,8 +3061,6 @@ function drawSpecialWeaponHud() {
     const panelY = 52;
     const panelWidth = 230;
     const panelHeight = 58;
-    const infiniteAmmo = difficulty === 'easy';
-
     ctx.save();
     ctx.fillStyle = 'rgba(5, 10, 22, 0.72)';
     ctx.strokeStyle = 'rgba(120, 180, 255, 0.35)';
@@ -3083,8 +3082,9 @@ function drawSpecialWeaponHud() {
 
         if (type === 'laser') {
             const energyRatio = Math.max(0, Math.min(1, weapon.energy / LASER_ENERGY_MAX));
-            const totalRatio = infiniteAmmo ? 1 : Math.max(0, Math.min(1, weapon.ammo / LASER_TOTAL_AMMO));
-            ctx.fillText(infiniteAmmo ? '∞ ammo' : `${(weapon.ammo / 60).toFixed(1)}s`, panelX + 48, panelY + 52);
+            const easyMult = difficulty === 'easy' ? 2 : 1;
+            const totalRatio = Math.max(0, Math.min(1, weapon.ammo / (LASER_TOTAL_AMMO * easyMult)));
+            ctx.fillText(`${(weapon.ammo / 60).toFixed(1)}s`, panelX + 48, panelY + 52);
             ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
             ctx.fillRect(panelX + 148, panelY + 24, 68, 12);
             ctx.fillStyle = 'rgba(80, 148, 255, 0.4)';
@@ -3094,7 +3094,7 @@ function drawSpecialWeaponHud() {
             ctx.strokeStyle = 'rgba(215, 251, 255, 0.85)';
             ctx.strokeRect(panelX + 148, panelY + 24, 68, 12);
         } else {
-            ctx.fillText(infiniteAmmo ? '∞ shots' : `${weapon.ammo} shots`, panelX + 48, panelY + 52);
+            ctx.fillText(`${weapon.ammo} shots`, panelX + 48, panelY + 52);
         }
     } else {
         ctx.fillStyle = '#8aa0bf';
@@ -3884,10 +3884,6 @@ function drawDifficultySelectOverlay() {
         }
         ctx.fillText(option.label, -cardWidth / 2 + 52, 42);
         ctx.shadowBlur = 0;
-
-        ctx.font = '18px "Courier New", monospace';
-        ctx.fillStyle = isSelected ? '#f8fbff' : '#95accf';
-        ctx.fillText(option.detail, -cardWidth / 2 + 54, 84);
 
         ctx.textAlign = 'right';
         ctx.font = 'bold 15px "Courier New", monospace';
