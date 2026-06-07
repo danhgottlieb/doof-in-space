@@ -64,78 +64,8 @@ const ENEMY_COLLISION_RADIUS = 44;
 // Load ship image
 const shipImg = new Image();
 const shipShootingImg = new Image();
-let cleanedShipImg = null;
-let cleanedShipShootingImg = null;
-function cleanSpriteAlpha(img) {
-    if (!img || !img.naturalWidth || !img.naturalHeight) return null;
-
-    const c = document.createElement('canvas');
-    c.width = img.naturalWidth;
-    c.height = img.naturalHeight;
-    const cx = c.getContext('2d', { willReadFrequently: true });
-    cx.drawImage(img, 0, 0);
-    const data = cx.getImageData(0, 0, c.width, c.height);
-    const px = data.data;
-    const w = c.width;
-    const h = c.height;
-
-    // Pass 1: Kill low-alpha fringe
-    for (let i = 0; i < px.length; i += 4) {
-        const a = px[i + 3];
-        if (a < 40) {
-            px[i] = px[i+1] = px[i+2] = px[i+3] = 0;
-        } else if (a < 200) {
-            const factor = (a / 255) * (a / 255);
-            px[i] = Math.round(px[i] * factor);
-            px[i + 1] = Math.round(px[i + 1] * factor);
-            px[i + 2] = Math.round(px[i + 2] * factor);
-        }
-    }
-
-    // Pass 2: Erode bright edge pixels adjacent to transparency
-    const copy = new Uint8ClampedArray(px);
-    for (let y = 1; y < h - 1; y++) {
-        for (let x = 1; x < w - 1; x++) {
-            const idx = (y * w + x) * 4;
-            const a = copy[idx + 3];
-            if (a < 60) continue; // skip transparent
-            // Check if any neighbor is transparent
-            let hasTransparentNeighbor = false;
-            for (let dy = -1; dy <= 1; dy++) {
-                for (let dx = -1; dx <= 1; dx++) {
-                    if (dx === 0 && dy === 0) continue;
-                    const nIdx = ((y + dy) * w + (x + dx)) * 4;
-                    if (copy[nIdx + 3] < 30) { hasTransparentNeighbor = true; break; }
-                }
-                if (hasTransparentNeighbor) break;
-            }
-            if (hasTransparentNeighbor) {
-                // Darken edge pixel and reduce alpha
-                const r = px[idx], g = px[idx+1], b = px[idx+2];
-                const brightness = (r + g + b) / 3;
-                if (brightness > 140) {
-                    px[idx] = Math.round(r * 0.4);
-                    px[idx+1] = Math.round(g * 0.4);
-                    px[idx+2] = Math.round(b * 0.4);
-                    px[idx+3] = Math.round(a * 0.6);
-                }
-            }
-        }
-    }
-
-    cx.putImageData(data, 0, 0);
-    return c;
-}
-function refreshCleanShipSprites() {
-    if (shipImg.complete && shipImg.naturalWidth) {
-        cleanedShipImg = cleanSpriteAlpha(shipImg);
-    }
-    if (shipShootingImg.complete && shipShootingImg.naturalWidth) {
-        cleanedShipShootingImg = cleanSpriteAlpha(shipShootingImg);
-    }
-}
-shipImg.onload = refreshCleanShipSprites;
-shipShootingImg.onload = refreshCleanShipSprites;
+shipImg.onload = () => {};
+shipShootingImg.onload = () => {};
 shipImg.src = 'pug-ship.png';
 shipShootingImg.src = 'pug-ship-shooting.png';
 refreshCleanShipSprites();
@@ -4185,8 +4115,8 @@ function draw() {
             }
 
             const currentShipImg = ship.shootAnim > 0
-                ? (cleanedShipShootingImg || shipShootingImg)
-                : (cleanedShipImg || shipImg);
+                ? shipShootingImg
+                : shipImg;
             ctx.drawImage(currentShipImg, -SHIP_IMG_WIDTH / 2 + SHIP_IMG_OFFSET_X, -SHIP_IMG_HEIGHT / 2, SHIP_IMG_WIDTH, SHIP_IMG_HEIGHT);
             ctx.restore();
 
@@ -4235,7 +4165,7 @@ function draw() {
     for (let i = 0; i < lives; i++) {
         const lx = 30 + i * 35;
         const ly = 132;
-        ctx.drawImage(cleanedShipImg || shipImg, lx - 15, ly - 10, 30, 21);
+        ctx.drawImage(shipImg, lx - 15, ly - 10, 30, 21);
     }
     drawHitPointHud();
 
