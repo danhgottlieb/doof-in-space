@@ -34,7 +34,7 @@ Always read this file at the start of any session working on this project.
 ## Key Technical Notes
 - **Variable ordering matters**: `let` declarations used throughout; the `resize()` call during init triggers `generateTitleAsteroids()` which needs `difficulty` to already be initialized. Keep game state variables ABOVE the resize call.
 - **Keydown handler flow**: Uses `if/else if` chains for state transitions to prevent one keypress from triggering multiple state changes in the same event.
-- **Ship sprite cleanup**: Runtime `cleanSpriteAlpha()` function processes ship PNGs on load to remove fringe halos. The PNGs themselves were also processed with Python/Pillow to darken the cockpit dome (was bright blue/white from a bad bg removal, now dark semi-transparent glass).
+- **Ship sprites**: PNGs were pre-processed with Pillow (cockpit dome fix). No runtime alpha cleanup — images are used as-is.
 - **frameCount**: Incremented each frame inside `draw()`, used for all animation timing throughout the game.
 
 ## Session History
@@ -46,7 +46,13 @@ Always read this file at the start of any session working on this project.
 - **Fixed ship sprite halo**: Cockpit dome area had full-alpha bright blue/white pixels from a bad background removal. Processed PNGs with Python/Pillow to convert dome to dark semi-transparent glass. Also added runtime `cleanSpriteAlpha()` for edge fringe cleanup.
 - All changes deployed to https://doof-in-space.vercel.app and pushed to GitHub.
 
+### Session — 2026-06-07
+- **Fixed ship too transparent**: Removed the `cleanSpriteAlpha()` runtime function entirely. It was double-processing PNGs that had already been fixed with Pillow, making the ship look like a ghost. Ship now renders at full opacity using the raw PNG assets.
+- Deployed to https://doof-in-space.vercel.app and pushed to GitHub.
+
+## Key Technical Notes Update
+- **Ship sprite cleanup** is NO LONGER performed at runtime. The PNGs (`pug-ship.png`, `pug-ship-shooting.png`) were pre-processed with Pillow and are used as-is.
+
 ## Open Items
-- [ ] Ship sprite may benefit from a professionally re-generated PNG with proper transparency
 - [ ] The `doofs-adventures` repo has an older version of this game without difficulty modes — consider syncing
 - [ ] Mobile touch controls not yet verified with difficulty select screen
