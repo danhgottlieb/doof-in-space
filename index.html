@@ -339,8 +339,7 @@ window.addEventListener('keydown', e => {
     }
     if (gameState === 'title' && !levelSelectActive && (e.code === 'Enter' || e.code === 'Space')) {
         startDifficultySelect();
-    }
-    if (gameState === 'difficultySelect') {
+    } else if (gameState === 'difficultySelect') {
         if (e.code === 'ArrowUp' || e.code === 'ArrowDown') {
             difficultySelectChoice = difficultySelectChoice === 0 ? 1 : 0;
         }
