@@ -63,9 +63,47 @@ const ENEMY_COLLISION_RADIUS = 44;
 
 // Load ship image
 const shipImg = new Image();
-shipImg.src = 'pug-ship.png';
 const shipShootingImg = new Image();
+let cleanedShipImg = null;
+let cleanedShipShootingImg = null;
+function cleanSpriteAlpha(img) {
+    if (!img || !img.naturalWidth || !img.naturalHeight) return null;
+
+    const c = document.createElement('canvas');
+    c.width = img.naturalWidth;
+    c.height = img.naturalHeight;
+    const cx = c.getContext('2d', { willReadFrequently: true });
+    cx.drawImage(img, 0, 0);
+    const data = cx.getImageData(0, 0, c.width, c.height);
+    const px = data.data;
+    for (let i = 0; i < px.length; i += 4) {
+        const a = px[i + 3];
+        if (a < 40) {
+            px[i + 3] = 0;
+        } else if (a < 180) {
+            // Premultiply RGB to eliminate white fringe halos
+            const factor = (a / 255) * (a / 255);
+            px[i] = Math.round(px[i] * factor);
+            px[i + 1] = Math.round(px[i + 1] * factor);
+            px[i + 2] = Math.round(px[i + 2] * factor);
+        }
+    }
+    cx.putImageData(data, 0, 0);
+    return c;
+}
+function refreshCleanShipSprites() {
+    if (shipImg.complete && shipImg.naturalWidth) {
+        cleanedShipImg = cleanSpriteAlpha(shipImg);
+    }
+    if (shipShootingImg.complete && shipShootingImg.naturalWidth) {
+        cleanedShipShootingImg = cleanSpriteAlpha(shipShootingImg);
+    }
+}
+shipImg.onload = refreshCleanShipSprites;
+shipShootingImg.onload = refreshCleanShipSprites;
+shipImg.src = 'pug-ship.png';
 shipShootingImg.src = 'pug-ship-shooting.png';
+refreshCleanShipSprites();
 const doofPortrait = new Image();
 doofPortrait.src = 'doof-portrait.png';
 doofPortrait.onload = () => {
@@ -3707,55 +3745,227 @@ function drawDifficultySelectOverlay() {
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
 
+    const time = frameCount * 0.016;
+    const panelWidth = Math.min(canvas.width * 0.82, 940);
+    const panelHeight = Math.min(canvas.height * 0.72, 560);
+    const panelX = centerX - panelWidth / 2;
+    const panelY = centerY - panelHeight / 2 + 10;
+    const cardWidth = Math.min(panelWidth * 0.82, 720);
+    const cardHeight = Math.min(120, panelHeight * 0.24);
+    const cardGap = Math.min(34, panelHeight * 0.07);
+    const cardsStartY = panelY + panelHeight * 0.37;
+    const headerPulse = 0.55 + (Math.sin(frameCount * 0.08) + 1) * 0.18;
+
+    function roundedRectPath(x, y, width, height, radius) {
+        const r = Math.min(radius, width / 2, height / 2);
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + width - r, y);
+        ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+        ctx.lineTo(x + width, y + height - r);
+        ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+        ctx.lineTo(x + r, y + height);
+        ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+    }
+
     ctx.save();
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.82)';
+    ctx.fillStyle = 'rgba(2, 6, 16, 0.72)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const vignette = ctx.createRadialGradient(
+        centerX,
+        centerY * 0.94,
+        Math.min(canvas.width, canvas.height) * 0.12,
+        centerX,
+        centerY,
+        Math.max(canvas.width, canvas.height) * 0.74
+    );
+    vignette.addColorStop(0, 'rgba(26, 52, 96, 0.16)');
+    vignette.addColorStop(0.52, 'rgba(6, 14, 34, 0.46)');
+    vignette.addColorStop(1, 'rgba(0, 0, 0, 0.9)');
+    ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    ctx.fillStyle = '#ffe066';
-    ctx.font = 'bold 46px Impact, Haettenschweiler, "Arial Black", sans-serif';
-    ctx.fillText('SELECT DIFFICULTY', centerX, canvas.height * 0.18);
+    const panelGlow = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, panelWidth * 0.65);
+    panelGlow.addColorStop(0, 'rgba(90, 180, 255, 0.12)');
+    panelGlow.addColorStop(0.65, 'rgba(40, 90, 180, 0.05)');
+    panelGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = panelGlow;
+    ctx.fillRect(panelX - 60, panelY - 60, panelWidth + 120, panelHeight + 120);
+
+    roundedRectPath(panelX, panelY, panelWidth, panelHeight, 30);
+    const panelGradient = ctx.createLinearGradient(panelX, panelY, panelX, panelY + panelHeight);
+    panelGradient.addColorStop(0, 'rgba(9, 16, 34, 0.95)');
+    panelGradient.addColorStop(0.42, 'rgba(10, 18, 42, 0.92)');
+    panelGradient.addColorStop(1, 'rgba(4, 10, 24, 0.95)');
+    ctx.fillStyle = panelGradient;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(122, 195, 255, 0.28)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.save();
+    roundedRectPath(panelX + 12, panelY + 12, panelWidth - 24, panelHeight - 24, 24);
+    ctx.clip();
+    const scanGradient = ctx.createLinearGradient(panelX, panelY, panelX + panelWidth, panelY + panelHeight);
+    scanGradient.addColorStop(0, 'rgba(255, 255, 255, 0.04)');
+    scanGradient.addColorStop(0.5, 'rgba(100, 200, 255, 0.01)');
+    scanGradient.addColorStop(1, 'rgba(255, 255, 255, 0.06)');
+    ctx.fillStyle = scanGradient;
+    ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
+    for (let y = panelY + 10; y < panelY + panelHeight; y += 6) {
+        ctx.fillStyle = 'rgba(130, 210, 255, 0.03)';
+        ctx.fillRect(panelX + 16, y, panelWidth - 32, 1);
+    }
+    ctx.restore();
+
+    const accentY = panelY + 42;
+    ctx.strokeStyle = 'rgba(124, 210, 255, 0.2)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(panelX + 46, accentY);
+    ctx.lineTo(centerX - 170, accentY);
+    ctx.moveTo(centerX + 170, accentY);
+    ctx.lineTo(panelX + panelWidth - 46, accentY);
+    ctx.stroke();
+
+    ctx.font = 'bold 16px "Courier New", monospace';
+    ctx.fillStyle = 'rgba(137, 215, 255, 0.8)';
+    ctx.fillText('COCKPIT CONFIG // MISSION RISK PROFILE', centerX, panelY + 52);
+
+    ctx.shadowColor = `rgba(124, 223, 255, ${headerPulse})`;
+    ctx.shadowBlur = 26;
+    ctx.fillStyle = '#ffe37c';
+    ctx.font = 'bold 52px Impact, Haettenschweiler, "Arial Black", sans-serif';
+    ctx.fillText('SELECT DIFFICULTY', centerX, panelY + 112);
+    ctx.shadowBlur = 0;
 
     ctx.font = '20px "Courier New", monospace';
     ctx.fillStyle = '#a9d7ff';
-    ctx.fillText('Choose how rough this mission gets', centerX, canvas.height * 0.26);
+    ctx.fillText('Choose how rough this mission gets', centerX, panelY + 154);
 
     for (let i = 0; i < DIFFICULTY_OPTIONS.length; i++) {
         const option = DIFFICULTY_OPTIONS[i];
         const isSelected = i === difficultySelectChoice;
-        const y = centerY - 34 + i * 104;
+        const y = cardsStartY + i * (cardHeight + cardGap);
+        const accentColor = option.value === 'easy' ? [125, 255, 179] : [255, 143, 166];
+        const accentFill = option.value === 'easy' ? '#7dffb3' : '#ff8fa6';
+        const dimAlpha = isSelected ? 1 : 0.55;
+        const pulse = isSelected ? 0.78 + (Math.sin(frameCount * 0.13 + i) + 1) * 0.16 : 0.22;
+        const scale = isSelected ? 1 + Math.sin(frameCount * 0.11 + i * 0.7) * 0.018 : 0.97;
 
         ctx.save();
-        ctx.globalAlpha = isSelected ? 1 : 0.5;
-        ctx.fillStyle = isSelected ? 'rgba(20, 36, 70, 0.9)' : 'rgba(8, 14, 28, 0.72)';
-        ctx.strokeStyle = isSelected
-            ? (option.value === 'easy' ? 'rgba(125, 255, 179, 0.9)' : 'rgba(255, 143, 166, 0.9)')
-            : 'rgba(140, 180, 255, 0.2)';
-        ctx.lineWidth = isSelected ? 3 : 1.5;
-        ctx.fillRect(centerX - 265, y - 34, 530, 68);
-        ctx.strokeRect(centerX - 265, y - 34, 530, 68);
+        ctx.translate(centerX, y);
+        ctx.scale(scale, scale);
+        ctx.globalAlpha = dimAlpha;
 
-        ctx.font = isSelected
-            ? 'bold 52px Impact, Haettenschweiler, "Arial Black", sans-serif'
-            : 'bold 40px Impact, Haettenschweiler, "Arial Black", sans-serif';
-        ctx.fillStyle = option.value === 'easy' ? '#7dffb3' : '#ff8fa6';
         if (isSelected) {
-            ctx.shadowColor = option.value === 'easy' ? 'rgba(125, 255, 179, 0.85)' : 'rgba(255, 143, 166, 0.85)';
-            ctx.shadowBlur = 18;
+            const glow = ctx.createRadialGradient(0, cardHeight * 0.52, 16, 0, cardHeight * 0.52, cardWidth * 0.56);
+            glow.addColorStop(0, `rgba(${accentColor[0]}, ${accentColor[1]}, ${accentColor[2]}, 0.22)`);
+            glow.addColorStop(0.55, `rgba(${accentColor[0]}, ${accentColor[1]}, ${accentColor[2]}, 0.08)`);
+            glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = glow;
+            ctx.fillRect(-cardWidth * 0.62, -cardHeight * 0.42, cardWidth * 1.24, cardHeight * 1.84);
         }
-        ctx.fillText(option.label, centerX, y - 6);
 
+        roundedRectPath(-cardWidth / 2, 0, cardWidth, cardHeight, 22);
+        const cardGradient = ctx.createLinearGradient(0, 0, 0, cardHeight);
+        if (isSelected) {
+            cardGradient.addColorStop(0, 'rgba(20, 34, 62, 0.96)');
+            cardGradient.addColorStop(0.55, 'rgba(10, 18, 38, 0.96)');
+            cardGradient.addColorStop(1, 'rgba(8, 12, 28, 0.98)');
+        } else {
+            cardGradient.addColorStop(0, 'rgba(11, 18, 34, 0.85)');
+            cardGradient.addColorStop(1, 'rgba(6, 11, 22, 0.85)');
+        }
+        ctx.fillStyle = cardGradient;
+        ctx.fill();
+
+        ctx.save();
+        roundedRectPath(-cardWidth / 2 + 2, 2, cardWidth - 4, cardHeight - 4, 20);
+        ctx.clip();
+        const sheen = ctx.createLinearGradient(-cardWidth / 2, 0, cardWidth / 2, cardHeight);
+        sheen.addColorStop(0, `rgba(${accentColor[0]}, ${accentColor[1]}, ${accentColor[2]}, ${isSelected ? 0.14 : 0.05})`);
+        sheen.addColorStop(0.35, 'rgba(255, 255, 255, 0.035)');
+        sheen.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = sheen;
+        ctx.fillRect(-cardWidth / 2, 0, cardWidth, cardHeight);
+        ctx.restore();
+
+        ctx.strokeStyle = isSelected
+            ? `rgba(${accentColor[0]}, ${accentColor[1]}, ${accentColor[2]}, ${0.7 + pulse * 0.22})`
+            : 'rgba(140, 180, 255, 0.18)';
+        ctx.lineWidth = isSelected ? 3 : 1.5;
+        ctx.shadowColor = isSelected ? `rgba(${accentColor[0]}, ${accentColor[1]}, ${accentColor[2]}, 0.8)` : 'transparent';
+        ctx.shadowBlur = isSelected ? 22 + pulse * 10 : 0;
+        roundedRectPath(-cardWidth / 2, 0, cardWidth, cardHeight, 22);
+        ctx.stroke();
         ctx.shadowBlur = 0;
+
+        ctx.fillStyle = `rgba(${accentColor[0]}, ${accentColor[1]}, ${accentColor[2]}, ${isSelected ? 0.95 : 0.48})`;
+        ctx.fillRect(-cardWidth / 2 + 18, 18, 8, cardHeight - 36);
+        ctx.fillRect(cardWidth / 2 - 26, 18, 8, cardHeight - 36);
+
+        ctx.textAlign = 'left';
+        ctx.font = isSelected
+            ? 'bold 54px Impact, Haettenschweiler, "Arial Black", sans-serif'
+            : 'bold 42px Impact, Haettenschweiler, "Arial Black", sans-serif';
+        ctx.fillStyle = accentFill;
+        if (isSelected) {
+            ctx.shadowColor = `rgba(${accentColor[0]}, ${accentColor[1]}, ${accentColor[2]}, 0.95)`;
+            ctx.shadowBlur = 20 + pulse * 10;
+        }
+        ctx.fillText(option.label, -cardWidth / 2 + 52, 42);
+        ctx.shadowBlur = 0;
+
         ctx.font = '18px "Courier New", monospace';
-        ctx.fillStyle = isSelected ? '#f8fbff' : '#a7b9d8';
-        ctx.fillText(option.detail, centerX, y + 28);
+        ctx.fillStyle = isSelected ? '#f8fbff' : '#95accf';
+        ctx.fillText(option.detail, -cardWidth / 2 + 54, 84);
+
+        ctx.textAlign = 'right';
+        ctx.font = 'bold 15px "Courier New", monospace';
+        ctx.fillStyle = isSelected ? '#e9faff' : 'rgba(200, 220, 255, 0.58)';
+        ctx.fillText(isSelected ? 'LOCKED IN' : 'AVAILABLE', cardWidth / 2 - 36, 34);
+
+        ctx.font = '12px "Courier New", monospace';
+        ctx.fillStyle = isSelected ? `rgba(${accentColor[0]}, ${accentColor[1]}, ${accentColor[2]}, 0.94)` : 'rgba(127, 155, 202, 0.75)';
+        ctx.fillText(option.value === 'easy' ? 'FORGIVING LOADOUT' : 'FULL DANGER PROTOCOL', cardWidth / 2 - 36, 60);
+
+        if (isSelected) {
+            ctx.strokeStyle = `rgba(${accentColor[0]}, ${accentColor[1]}, ${accentColor[2]}, 0.48)`;
+            ctx.lineWidth = 1.2;
+            for (let s = 0; s < 8; s++) {
+                const orbit = frameCount * 0.055 + s * (Math.PI / 4);
+                const sparkleX = Math.cos(orbit) * (cardWidth * 0.42 + Math.sin(frameCount * 0.07 + s) * 10);
+                const sparkleY = cardHeight * 0.5 + Math.sin(orbit * 1.4) * (cardHeight * 0.56);
+                const sparkleSize = 1.8 + ((Math.sin(frameCount * 0.18 + s * 2.1) + 1) * 0.9);
+                ctx.fillStyle = `rgba(${accentColor[0]}, ${accentColor[1]}, ${accentColor[2]}, ${0.45 + Math.sin(frameCount * 0.16 + s) * 0.18})`;
+                ctx.beginPath();
+                ctx.arc(sparkleX, sparkleY, sparkleSize, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.moveTo(sparkleX - sparkleSize * 2.2, sparkleY);
+                ctx.lineTo(sparkleX + sparkleSize * 2.2, sparkleY);
+                ctx.moveTo(sparkleX, sparkleY - sparkleSize * 2.2);
+                ctx.lineTo(sparkleX, sparkleY + sparkleSize * 2.2);
+                ctx.stroke();
+            }
+        }
         ctx.restore();
     }
 
+    const footerY = panelY + panelHeight - 42;
     ctx.fillStyle = '#b8c7e2';
     ctx.font = '18px "Courier New", monospace';
-    ctx.fillText('↑/↓ choose • SPACE/ENTER confirm • ESC back', centerX, canvas.height * 0.84);
+    ctx.fillText('↑/↓ choose • SPACE/ENTER confirm • ESC back', centerX, footerY);
+    ctx.font = '14px "Courier New", monospace';
+    ctx.fillStyle = `rgba(140, 205, 255, ${0.4 + Math.sin(time * 3.5) * 0.12})`;
+    ctx.fillText('SCI-FI COCKPIT UI // SELECTED PROFILE IS HOT', centerX, footerY - 26);
     ctx.restore();
 }
 
@@ -3939,7 +4149,9 @@ function draw() {
                 ctx.shadowBlur = 0;
             }
 
-            const currentShipImg = ship.shootAnim > 0 ? shipShootingImg : shipImg;
+            const currentShipImg = ship.shootAnim > 0
+                ? (cleanedShipShootingImg || shipShootingImg)
+                : (cleanedShipImg || shipImg);
             ctx.drawImage(currentShipImg, -SHIP_IMG_WIDTH / 2 + SHIP_IMG_OFFSET_X, -SHIP_IMG_HEIGHT / 2, SHIP_IMG_WIDTH, SHIP_IMG_HEIGHT);
             ctx.restore();
 
@@ -3988,7 +4200,7 @@ function draw() {
     for (let i = 0; i < lives; i++) {
         const lx = 30 + i * 35;
         const ly = 132;
-        ctx.drawImage(shipImg, lx - 15, ly - 10, 30, 21);
+        ctx.drawImage(cleanedShipImg || shipImg, lx - 15, ly - 10, 30, 21);
     }
     drawHitPointHud();
 
