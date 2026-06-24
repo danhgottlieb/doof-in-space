@@ -3,15 +3,78 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Asteroids</title>
+    <title>Adventures in Space</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
-        canvas { display: block; }
+        canvas { display: block; touch-action: none; }
+
+        /* ---- Touch controls ---- */
+        #touchUI {
+            position: fixed; inset: 0; z-index: 10;
+            pointer-events: none;
+            font-family: 'Trebuchet MS', system-ui, sans-serif;
+        }
+        #touchUI .tbtn, #touchUI .tpill {
+            display: none; /* shown per-state via JS */
+            position: absolute;
+            pointer-events: auto;
+            touch-action: none;
+            -webkit-user-select: none; user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            align-items: center; justify-content: center;
+            color: #d6f0ff; font-weight: bold;
+            background: rgba(18,38,58,0.32);
+            border: 2px solid rgba(120,200,255,0.55);
+            box-shadow: 0 0 14px rgba(80,180,255,0.35), inset 0 0 12px rgba(40,120,200,0.25);
+            transition: background 0.05s, box-shadow 0.05s, transform 0.05s;
+        }
+        #touchUI .tbtn.active, #touchUI .tpill.active {
+            background: rgba(90,190,255,0.5);
+            box-shadow: 0 0 22px rgba(140,225,255,0.95), inset 0 0 16px rgba(120,220,255,0.5);
+            transform: scale(0.94);
+        }
+        #touchUI .tbtn { border-radius: 50%; }
+        #touchUI .round { width: 78px; height: 78px; font-size: 32px; }
+        #touchUI .big { width: 100px; height: 100px; font-size: 22px; letter-spacing: 1px; }
+        #touchUI .small { width: 50px; height: 50px; font-size: 18px; letter-spacing: 2px; }
+        /* gameplay layout */
+        #btnLeft   { bottom: 30px; left: 24px; }
+        #btnRight  { bottom: 30px; left: 116px; }
+        #btnThrust { bottom: 132px; right: 32px; }
+        #btnFire   { bottom: 30px; right: 32px; }
+        #btnPause  { top: 16px; right: 16px; }
+        /* menu pills */
+        #touchUI .tpill {
+            left: 50%; transform: translateX(-50%);
+            padding: 15px 34px; border-radius: 32px;
+            font-size: 22px; letter-spacing: 1px; white-space: nowrap;
+            background: rgba(18,38,58,0.55);
+        }
+        #touchUI .tpill.active { transform: translateX(-50%) scale(0.95); }
+        #btnStart { bottom: 13%; }
+        #btnEasy  { bottom: 20%; min-width: 180px; }
+        #btnHard  { bottom: 9%;  min-width: 180px; }
+        #touchUI #btnCharDoof  { bottom: 5%; left: 28%; min-width: 150px; }
+        #touchUI #btnCharDevyn { bottom: 5%; left: 72%; min-width: 150px; }
     </style>
 </head>
 <body>
 <canvas id="game"></canvas>
+<div id="touchUI">
+    <!-- gameplay -->
+    <div id="btnLeft" class="tbtn round" aria-label="Rotate left">&#9664;</div>
+    <div id="btnRight" class="tbtn round" aria-label="Rotate right">&#9654;</div>
+    <div id="btnThrust" class="tbtn round" aria-label="Thrust">&#9650;</div>
+    <div id="btnFire" class="tbtn big" aria-label="Fire">FIRE</div>
+    <div id="btnPause" class="tbtn small" aria-label="Pause">&#10073;&#10073;</div>
+    <!-- menus -->
+    <div id="btnStart" class="tpill" aria-label="Start">TAP TO START</div>
+    <div id="btnEasy" class="tpill" aria-label="Easy mode">EASY</div>
+    <div id="btnHard" class="tpill" aria-label="Hard mode">HARD</div>
+    <div id="btnCharDoof" class="tpill" aria-label="Play as Doof">DOOF</div>
+    <div id="btnCharDevyn" class="tpill" aria-label="Play as Devyn">DEVYN</div>
+</div>
 <script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -95,6 +158,54 @@ const bossAngryImg = new Image();
 bossAngryImg.src = 'boss-angry.png';
 const bossDefeatedImg = new Image();
 bossDefeatedImg.src = 'boss-defeated.png';
+
+// ---- Characters (Doof + Devyn) ----
+const devynShipImg = new Image();
+devynShipImg.src = 'devyn-ship.png';
+const devynShipShootingImg = new Image();
+devynShipShootingImg.src = 'devyn-ship-shooting.png';
+const devynEjectedImg = new Image();
+devynEjectedImg.src = 'devyn-ejected.png';
+const devynPortrait = new Image();
+devynPortrait.src = 'devyn-portrait.png';
+devynPortrait.onload = () => {
+    titlePortraitCache = null;
+    titlePortraitCacheWidth = 0;
+    titlePortraitCacheHeight = 0;
+    portraitGlowCache = null;
+    portraitGlowCacheSize = 0;
+};
+
+const CHARACTER_ORDER = ['doof', 'devyn'];
+const CHARACTERS = {
+    doof: {
+        name: 'Doof', titleWord: 'DOOF', label: 'DOOF IN SPACE',
+        ship: shipImg, shipShooting: shipShootingImg, ejected: pugEjectedImg, portrait: doofPortrait,
+        ejectedScale: 1,
+        pauseLabel: 'PAWS', pauseHint: 'Press P or ESC to unpaws', hintPause: 'P paws'
+    },
+    devyn: {
+        name: 'Devyn', titleWord: 'DEVYN', label: 'DEVYN IN SPACE',
+        ship: devynShipImg, shipShooting: devynShipShootingImg, ejected: devynEjectedImg, portrait: devynPortrait,
+        ejectedScale: 0.62,
+        pauseLabel: 'PAUSE', pauseHint: 'Press P or ESC to unpause', hintPause: 'P pause'
+    }
+};
+let selectedCharacter = 'doof';
+let characterSelectChoice = 0;
+function activeChar() { return CHARACTERS[selectedCharacter]; }
+function activePortrait() { return CHARACTERS[selectedCharacter].portrait; }
+function applyCharacterSelection() {
+    selectedCharacter = CHARACTER_ORDER[characterSelectChoice] || 'doof';
+    titlePortraitCache = null;
+    titlePortraitCacheWidth = 0;
+    titlePortraitCacheHeight = 0;
+    portraitGlowCache = null;
+    portraitGlowCacheSize = 0;
+    titleTextSurface = null;
+    titleTextSurfaceTick = -1;
+    titleFrameCache = null;
+}
 const ENEMY_WIDTH = 150;
 const ENEMY_HEIGHT = 100;
 const RED_ENEMY_WIDTH = 160;
@@ -172,7 +283,7 @@ function generateBackground() {
 }
 
 // Game state (must be before resize() which calls generateTitleAsteroids → getAsteroidSpeed)
-let gameState = 'title';
+let gameState = 'characterSelect';
 let difficulty = 'hard';
 const DIFFICULTY_OPTIONS = [
     { label: 'EASY', value: 'easy' },
@@ -298,7 +409,7 @@ window.addEventListener('keydown', e => {
     keys[e.code] = true;
     if (['Space', 'ArrowUp', 'ArrowDown', 'Enter'].includes(e.code)) e.preventDefault();
     // Start title music on first interaction (retry if browser blocked it)
-    if (gameState === 'title' || gameState === 'difficultySelect') {
+    if (gameState === 'characterSelect' || gameState === 'title' || gameState === 'difficultySelect') {
         if (!currentMusic) {
             switchMusic(titleMusic);
         } else if (currentMusic === titleMusic && titleMusic.paused) {
@@ -337,8 +448,24 @@ window.addEventListener('keydown', e => {
         }
         if (e.code === 'Escape') levelSelectActive = false;
     }
-    if (gameState === 'title' && !levelSelectActive && (e.code === 'Enter' || e.code === 'Space')) {
+    if (gameState === 'characterSelect') {
+        if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
+            characterSelectChoice = characterSelectChoice === 0 ? 1 : 0;
+            playPickupSound();
+        } else if (e.code === 'Enter' || e.code === 'Space') {
+            applyCharacterSelection();
+            gameState = 'title';
+            keys['Space'] = false;
+            keys['Enter'] = false;
+            titleFrameCache = null;
+        }
+    } else if (gameState === 'title' && !levelSelectActive && (e.code === 'Enter' || e.code === 'Space')) {
         startDifficultySelect();
+    } else if (gameState === 'title' && !levelSelectActive && e.code === 'Escape') {
+        gameState = 'characterSelect';
+        keys['Space'] = false;
+        keys['Enter'] = false;
+        titleFrameCache = null;
     } else if (gameState === 'difficultySelect') {
         if (e.code === 'ArrowUp' || e.code === 'ArrowDown') {
             difficultySelectChoice = difficultySelectChoice === 0 ? 1 : 0;
@@ -367,12 +494,12 @@ window.addEventListener('keydown', e => {
 });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
 window.addEventListener('click', () => {
-    if ((gameState === 'title' || gameState === 'difficultySelect') && !currentMusic) switchMusic(titleMusic);
+    if ((gameState === 'characterSelect' || gameState === 'title' || gameState === 'difficultySelect') && !currentMusic) switchMusic(titleMusic);
     if (currentMusic && currentMusic.paused) currentMusic.play().catch(() => {});
 }, { once: true });
 // Also try on pointerdown and mousedown for faster music start
 window.addEventListener('pointerdown', () => {
-    if ((gameState === 'title' || gameState === 'difficultySelect') && !currentMusic) switchMusic(titleMusic);
+    if ((gameState === 'characterSelect' || gameState === 'title' || gameState === 'difficultySelect') && !currentMusic) switchMusic(titleMusic);
     if (currentMusic && currentMusic.paused) currentMusic.play().catch(() => {});
 }, { once: true });
 
@@ -972,7 +1099,8 @@ function ensureTitlePortraitCache(drawWidth, drawHeight) {
     const width = Math.max(1, Math.round(drawWidth));
     const height = Math.max(1, Math.round(drawHeight));
 
-    if (!doofPortrait.complete || !doofPortrait.naturalWidth) {
+    const portrait = activePortrait();
+    if (!portrait.complete || !portrait.naturalWidth) {
         return null;
     }
 
@@ -985,18 +1113,17 @@ function ensureTitlePortraitCache(drawWidth, drawHeight) {
     tempCanvas.width = width;
     tempCanvas.height = height;
 
-    const cropTop = doofPortrait.naturalHeight * 0.04;
-    const cropHeight = doofPortrait.naturalHeight * 0.92;
+    // Cover the target width, top-anchored, preserving aspect ratio so both the
+    // square Doof portrait and the taller Devyn portrait frame nicely.
+    const coverScale = width / portrait.naturalWidth;
+    const drawW = portrait.naturalWidth * coverScale;
+    const drawH = portrait.naturalHeight * coverScale;
     tempCtx.drawImage(
-        doofPortrait,
+        portrait,
+        (width - drawW) / 2,
         0,
-        cropTop,
-        doofPortrait.naturalWidth,
-        cropHeight,
-        -width * 0.03,
-        0,
-        width * 1.06,
-        height * 1.02
+        drawW,
+        drawH
     );
 
     tempCtx.globalCompositeOperation = 'destination-in';
@@ -1160,16 +1287,17 @@ function renderTitleTextCanvas(drawWidth, drawHeight, mainTitleSize, subTitleSiz
     smallCtx.fillStyle = 'rgba(188, 232, 255, 0.95)';
     drawSpacedText('ASTEROIDS HERO MISSION', centerX, kickerY, kickerSpacing, 'fill', smallCtx);
 
+    const titleWord = activeChar().titleWord;
     smallCtx.font = `bold ${mainFontSize}px "Courier New", monospace`;
     smallCtx.strokeStyle = '#081224';
     smallCtx.lineWidth = Math.max(1.5, mainFontSize * 0.12);
-    drawPixelWaveText('DOOF', centerX, mainY, renderTime, mainWaveAmp, 5.0, 0.8, mainSpacing, 'stroke', smallCtx);
+    drawPixelWaveText(titleWord, centerX, mainY, renderTime, mainWaveAmp, 5.0, 0.8, mainSpacing, 'stroke', smallCtx);
 
     smallCtx.fillStyle = 'rgba(20, 10, 0, 0.45)';
-    drawPixelWaveText('DOOF', centerX + 1, mainY + 2, renderTime, mainWaveAmp, 5.0, 0.8, mainSpacing, 'fill', smallCtx, wave => `rgba(70, 30, 0, ${0.3 + (wave + 1) * 0.18})`);
+    drawPixelWaveText(titleWord, centerX + 1, mainY + 2, renderTime, mainWaveAmp, 5.0, 0.8, mainSpacing, 'fill', smallCtx, wave => `rgba(70, 30, 0, ${0.3 + (wave + 1) * 0.18})`);
 
     smallCtx.fillStyle = '#ffe99b';
-    drawPixelWaveText('DOOF', centerX, mainY, renderTime, mainWaveAmp, 5.0, 0.8, mainSpacing, 'fill', smallCtx, wave => getWaveGoldColor(wave));
+    drawPixelWaveText(titleWord, centerX, mainY, renderTime, mainWaveAmp, 5.0, 0.8, mainSpacing, 'fill', smallCtx, wave => getWaveGoldColor(wave));
 
     smallCtx.font = `bold ${subFontSize}px "Courier New", monospace`;
     smallCtx.strokeStyle = '#081224';
@@ -1227,7 +1355,7 @@ function renderTitlePromptCanvas(drawWidth, drawHeight, promptSize, hintSize, ti
 
     smallCtx.font = `bold ${hintFontSize}px "Courier New", monospace`;
     smallCtx.fillStyle = '#c7dcff';
-    drawSpacedText('Arrows/WASD steer • Space fire • P paws', centerX, hintY, Math.max(0.25, hintFontSize * 0.02), 'fill', smallCtx);
+    drawSpacedText(`Arrows/WASD steer • Space fire • ${activeChar().hintPause}`, centerX, hintY, Math.max(0.25, hintFontSize * 0.02), 'fill', smallCtx);
 
     return smallCanvas;
 }
@@ -2461,7 +2589,7 @@ function update() {
     if (paused) return;
     const firePressed = keys['Space'] || keys['KeyF'];
 
-    if (gameState === 'title' || gameState === 'difficultySelect') {
+    if (gameState === 'characterSelect' || gameState === 'title' || gameState === 'difficultySelect') {
         laserBeam = null;
         stopLaserHum();
         stopThruster();
@@ -3565,6 +3693,137 @@ function drawExplosionBlast(explosion) {
     ctx.restore();
 }
 
+function drawCharacterSelectScreen() {
+    const time = frameCount * 0.016;
+    const cx = canvas.width / 2;
+
+    // Readability vignette over the animated starfield
+    ctx.save();
+    ctx.fillStyle = 'rgba(2, 6, 16, 0.55)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const vignette = ctx.createRadialGradient(cx, canvas.height * 0.5, Math.min(canvas.width, canvas.height) * 0.12, cx, canvas.height * 0.5, Math.max(canvas.width, canvas.height) * 0.72);
+    vignette.addColorStop(0, 'rgba(20, 44, 88, 0.10)');
+    vignette.addColorStop(0.55, 'rgba(6, 14, 34, 0.40)');
+    vignette.addColorStop(1, 'rgba(0, 0, 0, 0.82)');
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // Heading: ADVENTURES IN SPACE
+    const headFloat = Math.sin(time * 2.0) * 4;
+    const headY = canvas.height * 0.13 + headFloat;
+    const headSize = Math.max(34, Math.min(canvas.width * 0.062, 88));
+    ctx.font = `bold ${headSize}px Impact, Haettenschweiler, "Arial Black", sans-serif`;
+    ctx.save();
+    ctx.shadowColor = 'rgba(110, 225, 255, 0.85)';
+    ctx.shadowBlur = 26;
+    ctx.lineWidth = Math.max(3, headSize * 0.06);
+    ctx.strokeStyle = '#06203a';
+    ctx.strokeText('ADVENTURES IN SPACE', cx, headY);
+    const headGrad = ctx.createLinearGradient(0, headY - headSize * 0.6, 0, headY + headSize * 0.6);
+    headGrad.addColorStop(0, '#ffffff');
+    headGrad.addColorStop(0.5, '#cdeeff');
+    headGrad.addColorStop(1, '#7fd0ff');
+    ctx.fillStyle = headGrad;
+    ctx.fillText('ADVENTURES IN SPACE', cx, headY);
+    ctx.restore();
+
+    ctx.font = `${Math.max(15, Math.min(canvas.width * 0.018, 24))}px "Courier New", monospace`;
+    ctx.fillStyle = 'rgba(190, 226, 255, 0.85)';
+    ctx.fillText('CHOOSE YOUR HERO', cx, headY + headSize * 0.78);
+
+    // Two character cards
+    const cardCenterY = canvas.height * 0.52;
+    const boxW = Math.min(canvas.width * 0.40, 440);
+    const boxH = Math.min(canvas.height * 0.50, 500);
+    const cardXs = [canvas.width * 0.28, canvas.width * 0.72];
+
+    function roundRect(x, y, w, h, r) {
+        const rr = Math.min(r, w / 2, h / 2);
+        ctx.beginPath();
+        ctx.moveTo(x + rr, y);
+        ctx.arcTo(x + w, y, x + w, y + h, rr);
+        ctx.arcTo(x + w, y + h, x, y + h, rr);
+        ctx.arcTo(x, y + h, x, y, rr);
+        ctx.arcTo(x, y, x + w, y, rr);
+        ctx.closePath();
+    }
+
+    for (let i = 0; i < CHARACTER_ORDER.length; i++) {
+        const charDef = CHARACTERS[CHARACTER_ORDER[i]];
+        const isSelected = i === characterSelectChoice;
+        const pulse = isSelected ? 1 + Math.sin(time * 3.2) * 0.025 : 1;
+        const ccx = cardXs[i];
+
+        ctx.save();
+        ctx.translate(ccx, cardCenterY);
+        ctx.scale(pulse, pulse);
+
+        const bx = -boxW / 2;
+        const by = -boxH / 2;
+
+        // Card backing + glow
+        if (isSelected) {
+            ctx.shadowColor = 'rgba(110, 230, 255, 0.85)';
+            ctx.shadowBlur = 34;
+        }
+        roundRect(bx, by, boxW, boxH, 26);
+        const cardGrad = ctx.createLinearGradient(bx, by, bx, by + boxH);
+        cardGrad.addColorStop(0, isSelected ? 'rgba(16, 34, 66, 0.92)' : 'rgba(10, 18, 36, 0.78)');
+        cardGrad.addColorStop(1, isSelected ? 'rgba(8, 18, 40, 0.92)' : 'rgba(5, 10, 22, 0.78)');
+        ctx.fillStyle = cardGrad;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.lineWidth = isSelected ? 3.5 : 2;
+        ctx.strokeStyle = isSelected ? 'rgba(122, 222, 255, 0.95)' : 'rgba(110, 150, 200, 0.35)';
+        ctx.stroke();
+
+        // Portrait (contain within inner box, bottom-anchored)
+        const portrait = charDef.portrait;
+        const pad = boxW * 0.08;
+        const innerW = boxW - pad * 2;
+        const innerH = boxH - pad * 2 - boxH * 0.13; // leave room for label
+        const innerTop = by + pad;
+        if (portrait.complete && portrait.naturalWidth > 0) {
+            const fit = Math.min(innerW / portrait.naturalWidth, innerH / portrait.naturalHeight);
+            const dW = portrait.naturalWidth * fit;
+            const dH = portrait.naturalHeight * fit;
+            const dX = -dW / 2;
+            const dY = innerTop + (innerH - dH); // bottom-anchored within image area
+            ctx.save();
+            roundRect(bx + pad * 0.5, by + pad * 0.5, boxW - pad, boxH - pad, 18);
+            ctx.clip();
+            if (!isSelected) ctx.globalAlpha = 0.72;
+            ctx.drawImage(portrait, dX, dY, dW, dH);
+            ctx.restore();
+        }
+
+        // Label
+        const labelY = by + boxH - boxH * 0.075;
+        const labelSize = Math.max(18, Math.min(boxW * 0.085, 34));
+        ctx.font = `bold ${labelSize}px Impact, Haettenschweiler, "Arial Black", sans-serif`;
+        ctx.fillStyle = isSelected ? '#ffe066' : 'rgba(200, 220, 245, 0.7)';
+        if (isSelected) {
+            ctx.shadowColor = 'rgba(255, 224, 102, 0.7)';
+            ctx.shadowBlur = 14;
+        }
+        ctx.fillText(charDef.label, 0, labelY);
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    }
+
+    // Prompt
+    const promptAlpha = 0.55 + (Math.sin(time * 4.2) + 1) * 0.22;
+    ctx.font = `bold ${Math.max(18, Math.min(canvas.width * 0.022, 30))}px "Courier New", monospace`;
+    ctx.fillStyle = `rgba(246, 251, 255, ${Math.min(1, promptAlpha)})`;
+    ctx.shadowColor = 'rgba(110, 225, 255, 0.7)';
+    ctx.shadowBlur = 16;
+    ctx.fillText(touchEnabled ? 'TAP A HERO TO LAUNCH' : '◄ ►  choose  •  SPACE to launch', cx, canvas.height * 0.84);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+}
+
 function drawTitleScreen() {
     const time = frameCount * 0.016;
     const portraitSize = Math.min(canvas.height * 0.78, canvas.width * 0.46);
@@ -3956,7 +4215,7 @@ function draw() {
         return;
     }
 
-    if ((gameState === 'title' || gameState === 'difficultySelect') && titleFrameCache && frameCount % 2 === 1) {
+    if ((gameState === 'characterSelect' || gameState === 'title' || gameState === 'difficultySelect') && titleFrameCache && frameCount % 2 === 1) {
         ctx.drawImage(titleFrameCache, 0, 0);
         return;
     }
@@ -3972,14 +4231,17 @@ function draw() {
         const s = stars[i];
         const twinkle = 0.5 + Math.sin(frameCount * s.twinkleSpeed + i) * 0.5;
         const alpha = s.brightness * twinkle * 0.5;
-        const starX = (gameState === 'title' || gameState === 'difficultySelect') ? s.x + Math.sin(time * 0.1 + i) * 2 : s.x;
+        const starX = (gameState === 'characterSelect' || gameState === 'title' || gameState === 'difficultySelect') ? s.x + Math.sin(time * 0.1 + i) * 2 : s.x;
         ctx.fillStyle = `rgba(255,255,255,${alpha})`;
         ctx.beginPath();
         ctx.arc(starX, s.y, s.size, 0, Math.PI * 2);
         ctx.fill();
     }
 
-    if (gameState === 'title' || gameState === 'difficultySelect') {
+    if (gameState === 'characterSelect' || gameState === 'title' || gameState === 'difficultySelect') {
+        if (gameState === 'characterSelect') {
+            drawCharacterSelectScreen();
+        } else {
         drawTitleScreen();
         if (levelSelectActive) {
             const levelEntries = getLevelSelectEntries();
@@ -4027,6 +4289,7 @@ function draw() {
             ctx.restore();
         } else if (gameState === 'difficultySelect') {
             drawDifficultySelectOverlay();
+        }
         }
         if (!titleFrameCache || titleFrameCache.width !== canvas.width || titleFrameCache.height !== canvas.height) {
             titleFrameCache = document.createElement('canvas');
@@ -4108,8 +4371,8 @@ function draw() {
             }
 
             const currentShipImg = ship.shootAnim > 0
-                ? shipShootingImg
-                : shipImg;
+                ? activeChar().shipShooting
+                : activeChar().ship;
             ctx.drawImage(currentShipImg, -SHIP_IMG_WIDTH / 2 + SHIP_IMG_OFFSET_X, -SHIP_IMG_HEIGHT / 2, SHIP_IMG_WIDTH, SHIP_IMG_HEIGHT);
             ctx.restore();
 
@@ -4135,7 +4398,10 @@ function draw() {
         ctx.globalAlpha = alpha;
         ctx.translate(ejectedPug.x, ejectedPug.y);
         ctx.rotate(ejectedPug.rotation);
-        ctx.drawImage(pugEjectedImg, -PUG_EJECTED_WIDTH / 2, -PUG_EJECTED_HEIGHT / 2, PUG_EJECTED_WIDTH, PUG_EJECTED_HEIGHT);
+        const ejScale = activeChar().ejectedScale || 1;
+        const ejW = PUG_EJECTED_WIDTH * ejScale;
+        const ejH = PUG_EJECTED_HEIGHT * ejScale;
+        ctx.drawImage(activeChar().ejected, -ejW / 2, -ejH / 2, ejW, ejH);
         ctx.restore();
     }
 
@@ -4158,7 +4424,7 @@ function draw() {
     for (let i = 0; i < lives; i++) {
         const lx = 30 + i * 35;
         const ly = 132;
-        ctx.drawImage(shipImg, lx - 15, ly - 10, 30, 21);
+        ctx.drawImage(activeChar().ship, lx - 15, ly - 10, 30, 21);
     }
     drawHitPointHud();
 
@@ -4217,7 +4483,8 @@ function draw() {
         ctx.save();
         ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        if (doofPortrait.complete && doofPortrait.naturalWidth > 0) {
+        const pausePortrait = activePortrait();
+        if (pausePortrait.complete && pausePortrait.naturalWidth > 0) {
             const portraitSize = Math.min(canvas.height * 0.5, canvas.width * 0.35);
             const cx = canvas.width / 2;
             const cy = canvas.height / 2 - 20;
@@ -4228,12 +4495,12 @@ function draw() {
             ctx.closePath();
             ctx.clip();
             ctx.globalAlpha = 0.3;
-            const imgW = doofPortrait.naturalWidth;
-            const imgH = doofPortrait.naturalHeight;
+            const imgW = pausePortrait.naturalWidth;
+            const imgH = pausePortrait.naturalHeight;
             const scale = Math.max(portraitSize / imgW, portraitSize / imgH) * 1.25;
             const drawW = imgW * scale;
             const drawH = imgH * scale;
-            ctx.drawImage(doofPortrait, cx - drawW / 2, cy - drawH * 0.45, drawW, drawH);
+            ctx.drawImage(pausePortrait, cx - drawW / 2, cy - drawH * 0.45, drawW, drawH);
             ctx.restore();
             ctx.save();
             ctx.globalAlpha = 0.5;
@@ -4252,11 +4519,11 @@ function draw() {
         ctx.fillStyle = '#ffe066';
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 3;
-        ctx.strokeText('PAWS', canvas.width / 2, canvas.height / 2);
-        ctx.fillText('PAWS', canvas.width / 2, canvas.height / 2);
+        ctx.strokeText(activeChar().pauseLabel, canvas.width / 2, canvas.height / 2);
+        ctx.fillText(activeChar().pauseLabel, canvas.width / 2, canvas.height / 2);
         ctx.font = '20px "Courier New", monospace';
         ctx.fillStyle = '#ccc';
-        ctx.fillText('Press P or ESC to unpaws', canvas.width / 2, canvas.height / 2 + 50);
+        ctx.fillText(activeChar().pauseHint, canvas.width / 2, canvas.height / 2 + 50);
         ctx.restore();
     }
 }
@@ -4265,7 +4532,93 @@ function draw() {
 function loop() {
     update();
     draw();
+    updateTouchUI();
     requestAnimationFrame(loop);
+}
+
+// ---- Touch controls ----
+function byId(id) { return document.getElementById(id); }
+
+let touchEnabled = false;
+let releaseTouchKeys = function () {};
+const TOUCH_GROUPS = {
+    play: ['btnLeft', 'btnRight', 'btnThrust', 'btnFire', 'btnPause'],
+    character: ['btnCharDoof', 'btnCharDevyn'],
+    title: ['btnStart'],
+    difficulty: ['btnEasy', 'btnHard']
+};
+let lastTouchGroup = '__init__';
+
+(function setupTouchControls() {
+    const isTouch = ('ontouchstart' in window) ||
+        navigator.maxTouchPoints > 0 ||
+        (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+    const ui = byId('touchUI');
+    if (!ui) return;
+    if (!isTouch) { ui.style.display = 'none'; return; }
+    touchEnabled = true;
+
+    // Hold-style button: drives keys[] while pressed (gameplay)
+    function hold(el, code) {
+        if (!el) return;
+        const press = e => { e.preventDefault(); keys[code] = true; el.classList.add('active'); };
+        const release = e => { if (e) e.preventDefault(); keys[code] = false; el.classList.remove('active'); };
+        el.addEventListener('pointerdown', press);
+        el.addEventListener('pointerup', release);
+        el.addEventListener('pointercancel', release);
+        el.addEventListener('pointerleave', release);
+    }
+
+    // Tap-style button: fires action on release (menus / pause)
+    function tap(el, fn) {
+        if (!el) return;
+        el.addEventListener('pointerdown', e => { e.preventDefault(); el.classList.add('active'); });
+        el.addEventListener('pointerup', e => { e.preventDefault(); el.classList.remove('active'); fn(); });
+        el.addEventListener('pointercancel', e => { el.classList.remove('active'); });
+        el.addEventListener('pointerleave', e => { el.classList.remove('active'); });
+    }
+
+    function dispatchKey(code) {
+        window.dispatchEvent(new KeyboardEvent('keydown', { code }));
+        window.dispatchEvent(new KeyboardEvent('keyup', { code }));
+    }
+
+    hold(byId('btnLeft'), 'ArrowLeft');
+    hold(byId('btnRight'), 'ArrowRight');
+    hold(byId('btnThrust'), 'ArrowUp');
+    hold(byId('btnFire'), 'Space');
+
+    tap(byId('btnStart'), () => dispatchKey('Space'));
+    tap(byId('btnPause'), () => dispatchKey('KeyP'));
+    tap(byId('btnEasy'), () => { difficultySelectChoice = 0; confirmDifficultySelection(); });
+    tap(byId('btnHard'), () => { difficultySelectChoice = 1; confirmDifficultySelection(); });
+    tap(byId('btnCharDoof'), () => { characterSelectChoice = 0; applyCharacterSelection(); gameState = 'title'; titleFrameCache = null; });
+    tap(byId('btnCharDevyn'), () => { characterSelectChoice = 1; applyCharacterSelection(); gameState = 'title'; titleFrameCache = null; });
+
+    releaseTouchKeys = function () {
+        ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'Space'].forEach(c => { keys[c] = false; });
+        ui.querySelectorAll('.tbtn, .tpill').forEach(b => b.classList.remove('active'));
+    };
+})();
+
+function updateTouchUI() {
+    if (!touchEnabled) return;
+    let group = null;
+    if (gameState === 'characterSelect') group = 'character';
+    else if (gameState === 'title' && !levelSelectActive) group = 'title';
+    else if (gameState === 'difficultySelect') group = 'difficulty';
+    else if (['playing', 'boss', 'bossIntro', 'bossDefeated'].includes(gameState)) group = 'play';
+
+    if (group === lastTouchGroup) return;
+    lastTouchGroup = group;
+
+    Object.values(TOUCH_GROUPS).forEach(ids =>
+        ids.forEach(id => { const el = byId(id); if (el) el.style.display = 'none'; })
+    );
+    releaseTouchKeys();
+    if (group) {
+        TOUCH_GROUPS[group].forEach(id => { const el = byId(id); if (el) el.style.display = 'flex'; });
+    }
 }
 
 loop();

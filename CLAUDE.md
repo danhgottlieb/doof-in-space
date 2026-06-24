@@ -10,7 +10,7 @@ Always read this file at the start of any session working on this project.
 - **Local path**: C:\Users\dagottl\Projects\doof-in-space
 - **Live URL**: https://doof-in-space.vercel.app
 - **Vercel project**: doof-in-space (under danhgottliebs-projects)
-- **Concept**: Standalone deployment of the "Doof In Space" asteroids game from the doofs-adventures universe
+- **Concept**: Standalone deployment of the "Adventures in Space" (formerly "Doof In Space") asteroids game from the doofs-adventures universe. Two playable characters: Doof (pug) and Devyn, chosen on a front-page character select.
 - **Tech**: Single HTML file (`index.html`), vanilla JS, Canvas 2D, all assets in root directory
 - **Deploy**: `npx vercel --prod` from repo root, also auto-deploys on push via GitHub
 
@@ -46,7 +46,26 @@ Always read this file at the start of any session working on this project.
 - **Fixed ship sprite halo**: Cockpit dome area had full-alpha bright blue/white pixels from a bad background removal. Processed PNGs with Python/Pillow to convert dome to dark semi-transparent glass. Also added runtime `cleanSpriteAlpha()` for edge fringe cleanup.
 - All changes deployed to https://doof-in-space.vercel.app and pushed to GitHub.
 
-### Session — 2026-06-07
+### Session — 2026-06-23
+- **Added real mobile touch controls.** Previously the "mobile touch controls" claim was false — the game was keyboard-only (no `touchstart`/`touchend` handlers, no on-screen buttons). Added a full on-screen control layer:
+  - HTML overlay `#touchUI` with cyan sci-fi glowing buttons: rotate ◄/► (bottom-left), thrust ▲ + FIRE (bottom-right), pause ⏸ (top-right), plus menu pills (TAP TO START, EASY, HARD).
+  - **Hold buttons** drive `keys[]` directly via pointer events (`ArrowLeft/ArrowRight/ArrowUp/Space`) so they reuse the existing input model. One FIRE button covers both normal and special weapons (the game already routes special-weapon fire through `Space`).
+  - **Tap buttons** for menus dispatch synthetic `KeyboardEvent`s (START→Space, pause→KeyP) or call `confirmDifficultySelection()` directly (EASY sets `difficultySelectChoice=0`, HARD sets `1`).
+  - `updateTouchUI()` runs each frame in `loop()` and shows/hides the right button group by `gameState` (title / difficultySelect / playing+boss states); releases held keys on every group change so no input sticks.
+  - Touch layer only activates on touch-capable devices (`ontouchstart` / `maxTouchPoints` / `pointer: coarse`); hidden entirely on desktop.
+  - Verified end-to-end with agent-browser (headless Chrome reports coarse pointer): title→difficulty→play transitions, hold-to-rotate, hold-to-fire (5 bullets), and pause toggle all work.
+
+### Session — 2026-06-23 (part 2) — Second character "Devyn" + character select
+- **Renamed game to "Adventures in Space"** (`<title>` + character-select heading). The per-character splash still shows "DOOF IN SPACE" / "DEVYN IN SPACE".
+- **Added a 2nd playable character, Devyn**, driven by a `CHARACTERS` config object (`doof`, `devyn`) with `CHARACTER_ORDER`. Each entry holds `ship`/`shipShooting`/`ejected`/`portrait` images plus `label`, `titleWord`, `pauseLabel` (Doof="PAWS", Devyn="PAUSE"), `pauseHint`, `hintPause`. Helpers: `activeChar()`, `activePortrait()`, `applyCharacterSelection()` (clears ALL title caches — titlePortraitCache, portraitGlowCache, titleTextSurface, titleFrameCache — since portrait + wave text differ per character).
+- **New front-page state `'characterSelect'`** (initial `gameState`). Flow: characterSelect → title → difficultySelect → playing. ESC walks back (title→characterSelect). `drawCharacterSelectScreen()` renders heading, two glowing portrait cards (selected pulses), and a prompt.
+- **All player visuals are now character-driven**: ship, firing sprite, ejected sprite, lives icon, title portrait, pause portrait/label/hint.
+- **Devyn assets** (repo root, transparent PNGs, normalized to match pug framing so the shared render constants `SHIP_IMG_WIDTH/OFFSET_X/GUN_TIP_*` work and firing doesn't jump): `devyn-ship.png`, `devyn-ship-shooting.png`, `devyn-ejected.png`, `devyn-portrait.png`.
+- **Touch:** added `character` group with `btnCharDoof`/`btnCharDevyn` pills; prompt text is touch-aware ("TAP A HERO TO LAUNCH").
+- **Bug fixed during review:** the two character pills were both stuck centered (stacked) because `#touchUI .tpill { left:50% }` out-specifies `#btnCharDoof { left:28% }` — DOOF was un-tappable on mobile. Fixed by raising selector specificity to `#touchUI #btnCharDoof/#btnCharDevyn`.
+- **Verified end-to-end with agent-browser** (desktop + 390×844 mobile): both characters' select → title → play → fire (no size jump) → pause (correct label/portrait) → ejected; both touch pills tappable and correctly positioned.
+
+
 - **Fixed ship too transparent**: Removed the `cleanSpriteAlpha()` runtime function entirely. It was double-processing PNGs that had already been fixed with Pillow, making the ship look like a ghost. Ship now renders at full opacity using the raw PNG assets.
 - Deployed to https://doof-in-space.vercel.app and pushed to GitHub.
 
@@ -55,4 +74,4 @@ Always read this file at the start of any session working on this project.
 
 ## Open Items
 - [ ] The `doofs-adventures` repo has an older version of this game without difficulty modes — consider syncing
-- [ ] Mobile touch controls not yet verified with difficulty select screen
+- [x] Mobile touch controls implemented and verified (Session 2026-06-23). Note: Konami/level-select screen is not touch-accessible (keyboard only) — acceptable for now.
