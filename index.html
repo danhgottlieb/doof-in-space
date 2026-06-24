@@ -431,6 +431,7 @@ function confirmDifficultySelection() {
     keys['Space'] = false;
     keys['Enter'] = false;
     titleFrameCache = null;
+    if (canvas) canvas.style.cursor = 'default';
     initGame();
 }
 
@@ -3868,9 +3869,13 @@ function drawCharacterSelectScreen() {
         // Portrait, bottom-anchored
         const portrait = charDef.portrait;
         const pad = boxW * 0.07;
+        const nameplateH = boxH * 0.135;
         const innerW = boxW - pad * 2;
-        const innerH = boxH - pad * 2 - boxH * 0.16;
-        const innerTop = by + pad;
+        const portraitTop = by + pad;
+        // Bottom-anchor the figure just above the nameplate so full-body
+        // characters (Devyn) stand on it instead of floating in empty space.
+        const portraitBottom = by + boxH - nameplateH - boxH * 0.012;
+        const innerH = portraitBottom - portraitTop;
         if (portrait.complete && portrait.naturalWidth > 0) {
             const fit = Math.min(innerW / portrait.naturalWidth, innerH / portrait.naturalHeight);
             const dW = portrait.naturalWidth * fit;
@@ -3879,7 +3884,7 @@ function drawCharacterSelectScreen() {
             roundRect(bx + pad * 0.5, by + pad * 0.5, boxW - pad, boxH - pad, 12);
             ctx.clip();
             if (!isSelected) ctx.globalAlpha = 0.6;
-            ctx.drawImage(portrait, -dW / 2, innerTop + (innerH - dH), dW, dH);
+            ctx.drawImage(portrait, -dW / 2, portraitBottom - dH, dW, dH);
             ctx.restore();
         }
         if (!isSelected) {
@@ -3941,7 +3946,7 @@ function drawCharacterSelectScreen() {
     // ---- Blinking start prompt ----
     const blink = (Math.sin(time * 5) > -0.3);
     if (blink) {
-        const prompt = touchEnabled ? 'TAP A HERO TO START' : 'PRESS  SPACE  TO  START';
+        const prompt = touchEnabled ? 'TAP A HERO TO START' : 'CLICK A HERO OR PRESS SPACE';
         ctx.font = `bold ${Math.max(18, Math.min(canvas.width * 0.024, 32))}px "Courier New", monospace`;
         ctx.fillStyle = '#ffe066';
         ctx.shadowColor = 'rgba(255, 210, 90, 0.8)';
@@ -4259,7 +4264,7 @@ function drawDifficultySelectOverlay() {
         ctx.fill();
         ctx.fillStyle = isSelected ? '#06121f' : `${acStr}, 0.6)`;
         ctx.font = `bold ${Math.max(13, Math.min(boxW * 0.045, 20))}px "Courier New", monospace`;
-        ctx.fillText(isSelected ? 'SELECTED' : 'TAP TO PICK', 0, plateY + plateH / 2 + 1);
+        ctx.fillText(isSelected ? 'SELECTED' : (touchEnabled ? 'TAP TO PICK' : 'CLICK TO PICK'), 0, plateY + plateH / 2 + 1);
 
         ctx.restore();
     }
@@ -4271,7 +4276,7 @@ function drawDifficultySelectOverlay() {
     ctx.fillStyle = `rgba(255, 224, 130, ${blink})`;
     ctx.shadowColor = 'rgba(255, 200, 70, 0.7)';
     ctx.shadowBlur = 14;
-    ctx.fillText(touchEnabled ? 'TAP A MODE TO LAUNCH' : 'PRESS SPACE TO LAUNCH', cx, promptY);
+    ctx.fillText(touchEnabled ? 'TAP A MODE TO LAUNCH' : 'CLICK A MODE OR PRESS SPACE', cx, promptY);
     ctx.shadowBlur = 0;
 
     // Flavor corners
@@ -4725,6 +4730,11 @@ function isPortraitBlocked() {
         const r = canvas.getBoundingClientRect();
         return { x: e.clientX - r.left, y: e.clientY - r.top };
     }
+    function activeRects() {
+        if (gameState === 'characterSelect') return characterCardRects;
+        if (gameState === 'difficultySelect') return difficultyCardRects;
+        return null;
+    }
     canvas.addEventListener('pointerdown', e => {
         if (activePointerId !== null) return; // ignore extra fingers
         activePointerId = e.pointerId;
@@ -4740,6 +4750,29 @@ function isPortraitBlocked() {
     canvas.addEventListener('pointercancel', e => {
         if (e.pointerId === activePointerId) activePointerId = null;
     });
+    // Desktop affordance: mouse hover highlights the card under the cursor and
+    // shows a pointer cursor, so the menus are clearly clickable (not touch-only).
+    canvas.addEventListener('pointermove', e => {
+        if (e.pointerType && e.pointerType !== 'mouse') return;
+        if (isPortraitBlocked()) return;
+        const rects = activeRects();
+        if (!rects) { canvas.style.cursor = 'default'; return; }
+        const p = pos(e);
+        let over = false;
+        for (const r of rects) {
+            if (hitRect(p.x, p.y, r)) {
+                over = true;
+                if (gameState === 'characterSelect' && characterSelectChoice !== r.index) {
+                    characterSelectChoice = r.index; titleFrameCache = null;
+                } else if (gameState === 'difficultySelect' && difficultySelectChoice !== r.index) {
+                    difficultySelectChoice = r.index; titleFrameCache = null;
+                }
+                break;
+            }
+        }
+        canvas.style.cursor = over ? 'pointer' : 'default';
+    });
+    canvas.addEventListener('pointerleave', () => { canvas.style.cursor = 'default'; });
 })();
 
 function hitRect(x, y, r) {
