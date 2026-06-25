@@ -483,8 +483,13 @@ window.addEventListener('keydown', e => {
     }
     if (gameState === 'characterSelect') {
         if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
-            characterSelectChoice = characterSelectChoice === 0 ? 1 : 0;
-            playPickupSound();
+            const target = e.code === 'ArrowLeft' ? 0 : 1;
+            if (target !== characterSelectChoice) {
+                characterSelectChoice = target;
+                playPickupSound();
+                titleFrameCache = null;
+            }
+            e.preventDefault();
         } else if (e.code === 'Enter' || e.code === 'Space') {
             applyCharacterSelection();
             gameState = 'title';
@@ -2855,7 +2860,7 @@ function update() {
             }
         }
 
-        if (!hitByEnemyBullet && boss && gameState === 'boss' && !boss.isAngry && dist(ship.x, ship.y, boss.x, boss.y) < ship.radius * 0.7 + boss.radius) {
+        if (!hitByEnemyBullet && ship && boss && gameState === 'boss' && !boss.isAngry && dist(ship.x, ship.y, boss.x, boss.y) < ship.radius * 0.7 + boss.radius) {
             if (absorbShieldHit(ship.x, ship.y)) {
                 const angle = Math.atan2(boss.y - ship.y, boss.x - ship.x);
                 boss.pushBackVx += Math.cos(angle) * 2.2;
@@ -3755,6 +3760,42 @@ function drawNeonBracket(x, y, w, h, size, color, lw) {
     ctx.restore();
 }
 
+// Compute (and cache) the alpha content bounding box of an image as fractions
+// 0..1 of its natural size. Lets us anchor a portrait by its visible pixels
+// instead of the image frame, so busts and full-body figures both sit on the
+// nameplate without floating or being cut off.
+function getContentBox(img) {
+    if (img._contentBox) return img._contentBox;
+    if (!img.complete || !img.naturalWidth) return null;
+    try {
+        const nw = img.naturalWidth, nh = img.naturalHeight;
+        const scale = Math.min(1, 256 / Math.max(nw, nh));
+        const sw = Math.max(1, Math.round(nw * scale));
+        const sh = Math.max(1, Math.round(nh * scale));
+        const oc = document.createElement('canvas');
+        oc.width = sw; oc.height = sh;
+        const octx = oc.getContext('2d', { willReadFrequently: true });
+        octx.drawImage(img, 0, 0, sw, sh);
+        const data = octx.getImageData(0, 0, sw, sh).data;
+        let minX = sw, minY = sh, maxX = -1, maxY = -1;
+        for (let y = 0; y < sh; y++) {
+            for (let x = 0; x < sw; x++) {
+                if (data[(y * sw + x) * 4 + 3] > 12) {
+                    if (x < minX) minX = x;
+                    if (x > maxX) maxX = x;
+                    if (y < minY) minY = y;
+                    if (y > maxY) maxY = y;
+                }
+            }
+        }
+        if (maxX < 0) { img._contentBox = { l: 0, t: 0, r: 1, b: 1 }; return img._contentBox; }
+        img._contentBox = { l: minX / sw, t: minY / sh, r: (maxX + 1) / sw, b: (maxY + 1) / sh };
+        return img._contentBox;
+    } catch (e) {
+        return null;
+    }
+}
+
 function drawCharacterSelectScreen() {
     const time = frameCount * 0.016;
     const cx = canvas.width / 2;
@@ -3866,25 +3907,34 @@ function drawCharacterSelectScreen() {
         for (let y = by + 6; y < by + boxH; y += 4) ctx.fillRect(bx, y, boxW, 1);
         ctx.restore();
 
-        // Portrait, bottom-anchored
+        // Portrait, anchored by its *visible* pixels (not the image frame) so a
+        // bust (Doof) and a full-body figure (Devyn) both sit on the nameplate.
         const portrait = charDef.portrait;
         const pad = boxW * 0.07;
         const nameplateH = boxH * 0.135;
         const innerW = boxW - pad * 2;
         const portraitTop = by + pad;
-        // Bottom-anchor the figure just above the nameplate so full-body
-        // characters (Devyn) stand on it instead of floating in empty space.
-        const portraitBottom = by + boxH - nameplateH - boxH * 0.012;
-        const innerH = portraitBottom - portraitTop;
+        // Content bottom lands exactly on the nameplate's top edge.
+        const baseline = by + boxH - nameplateH;
+        const availH = baseline - portraitTop;
         if (portrait.complete && portrait.naturalWidth > 0) {
-            const fit = Math.min(innerW / portrait.naturalWidth, innerH / portrait.naturalHeight);
-            const dW = portrait.naturalWidth * fit;
-            const dH = portrait.naturalHeight * fit;
+            const nW = portrait.naturalWidth, nH = portrait.naturalHeight;
+            const box = getContentBox(portrait);
+            const cL = (box ? box.l : 0) * nW;
+            const cR = (box ? box.r : 1) * nW;
+            const cB = (box ? box.b : 1) * nH;
+            const contentW = Math.max(1, cR - cL);
+            const contentH = Math.max(1, cB - (box ? box.t : 0) * nH);
+            const fit = Math.min(innerW / contentW, availH / contentH);
+            const dW = nW * fit, dH = nH * fit;
+            // Horizontally center the visible content; sit its bottom on baseline.
+            const drawX = -((cL + cR) / 2) * fit;
+            const drawY = baseline - cB * fit;
             ctx.save();
             roundRect(bx + pad * 0.5, by + pad * 0.5, boxW - pad, boxH - pad, 12);
             ctx.clip();
             if (!isSelected) ctx.globalAlpha = 0.6;
-            ctx.drawImage(portrait, -dW / 2, portraitBottom - dH, dW, dH);
+            ctx.drawImage(portrait, drawX, drawY, dW, dH);
             ctx.restore();
         }
         if (!isSelected) {
@@ -4669,9 +4719,15 @@ function isPortraitBlocked() {
 }
 
 (function setupTouchControls() {
-    const isTouch = ('ontouchstart' in window) ||
-        navigator.maxTouchPoints > 0 ||
-        (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+    // Only treat this as a touch device when there's a coarse pointer (finger)
+    // and NO fine pointer (mouse/trackpad). Desktops and touch-screen laptops
+    // have a fine pointer, so they keep mouse/keyboard controls and never show
+    // the on-screen buttons or the landscape gate.
+    const mm = window.matchMedia;
+    const hasFine = mm ? mm('(any-pointer: fine)').matches : false;
+    const hasCoarse = mm ? mm('(any-pointer: coarse)').matches : false;
+    const touchCapable = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+    const isTouch = mm ? (hasCoarse && !hasFine) : touchCapable;
     const ui = byId('touchUI');
     if (!ui) return;
     if (!isTouch) { ui.style.display = 'none'; return; }
