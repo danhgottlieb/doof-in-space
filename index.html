@@ -214,12 +214,14 @@ const CHARACTERS = {
         name: 'Doof', titleWord: 'DOOF', label: 'DOOF IN SPACE',
         ship: shipImg, shipShooting: shipShootingImg, ejected: pugEjectedImg, portrait: doofPortrait,
         ejectedScale: 1,
+        pausePortraitAnchor: 0.45,
         pauseLabel: 'PAWS', pauseHint: 'Press P or ESC to unpaws', hintPause: 'P paws'
     },
     devyn: {
         name: 'Devyn', titleWord: 'DEVYN', label: 'DEVYN IN SPACE',
         ship: devynShipImg, shipShooting: devynShipShootingImg, ejected: devynEjectedImg, portrait: devynPortrait,
         ejectedScale: 0.62,
+        pausePortraitAnchor: 0.30,
         pauseLabel: 'PAUSE', pauseHint: 'Press P or ESC to unpause', hintPause: 'P pause'
     }
 };
@@ -4658,7 +4660,8 @@ function draw() {
             const scale = Math.max(portraitSize / imgW, portraitSize / imgH) * 1.25;
             const drawW = imgW * scale;
             const drawH = imgH * scale;
-            ctx.drawImage(pausePortrait, cx - drawW / 2, cy - drawH * 0.45, drawW, drawH);
+            const anchor = activeChar().pausePortraitAnchor ?? 0.45;
+            ctx.drawImage(pausePortrait, cx - drawW / 2, cy - drawH * anchor, drawW, drawH);
             ctx.restore();
             ctx.save();
             ctx.globalAlpha = 0.5;
