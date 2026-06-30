@@ -456,6 +456,19 @@ function confirmDifficultySelection() {
 // Input
 const keys = {};
 let paused = false;
+
+// Game over → character select (auto after timer, or on key/tap).
+function returnToCharacterSelectAfterGameOver() {
+    gameOver = false;
+    gameOverTimer = 0;
+    ejectedPug = null;
+    shipExplosion = null;
+    laserBeam = null;
+    gameState = 'characterSelect';
+    titleFrameCache = null;
+    switchMusic(titleMusic);
+}
+
 window.addEventListener('keydown', e => {
     keys[e.code] = true;
     if (['Space', 'ArrowUp', 'ArrowDown', 'Enter'].includes(e.code)) e.preventDefault();
@@ -535,6 +548,12 @@ window.addEventListener('keydown', e => {
             keys['Enter'] = false;
             titleFrameCache = null;
         }
+    }
+    // Game over: any of Enter/Space/Escape returns to character select immediately
+    if ((gameState === 'gameover' || gameOver) && ['Enter', 'Space', 'Escape'].includes(e.code)) {
+        returnToCharacterSelectAfterGameOver();
+        keys['Space'] = false;
+        keys['Enter'] = false;
     }
     // Pause toggle
     if ((e.code === 'KeyP' || e.code === 'Escape') && ['playing', 'boss', 'bossIntro', 'bossDefeated'].includes(gameState)) {
@@ -2671,16 +2690,11 @@ function update() {
             if (shipExplosion.life <= 0) shipExplosion = null;
         }
         updateParticles();
-        // Linger on game over for a few seconds, then return to title
+        // Linger on game over for a few seconds, then return to character select
         if (!gameOverTimer) gameOverTimer = 240; // 4 seconds at 60fps
         gameOverTimer--;
         if (gameOverTimer <= 0) {
-            gameOver = false;
-            gameOverTimer = 0;
-            ejectedPug = null;
-            shipExplosion = null;
-            gameState = 'title';
-            switchMusic(titleMusic);
+            returnToCharacterSelectAfterGameOver();
         }
         prevFirePressed = firePressed;
         return;
@@ -4638,7 +4652,7 @@ function draw() {
         ctx.font = '48px monospace';
         ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 20);
         ctx.font = '20px monospace';
-        ctx.fillText('Press ENTER or SPACE to restart', canvas.width / 2, canvas.height / 2 + 30);
+        ctx.fillText('Press ENTER or TAP to choose a hero', canvas.width / 2, canvas.height / 2 + 30);
         ctx.font = '16px monospace';
         ctx.fillText(`Final Score: ${score}`, canvas.width / 2, canvas.height / 2 + 70);
     }
@@ -4858,6 +4872,10 @@ function hitRect(x, y, r) {
 
 function handleMenuTap(x, y) {
     if (isPortraitBlocked()) return;
+    if (gameState === 'gameover' || gameOver) {
+        returnToCharacterSelectAfterGameOver();
+        return;
+    }
     if (gameState === 'characterSelect') {
         for (const r of characterCardRects) {
             if (hitRect(x, y, r)) {
