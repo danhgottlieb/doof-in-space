@@ -98,9 +98,25 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 
 // Resize canvas to fill window
+// Reference for the smaller screen edge. If the device's short edge is
+// smaller than this, we render the game at a larger *virtual* resolution
+// (CSS-scaled back down to fill the screen) so the playfield "zooms out"
+// and the ship/asteroids occupy a desktop-like fraction of the view.
+const REFERENCE_MIN_EDGE = 720;
+const MAX_RENDER_SCALE = 2.4;
 function resize() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const minEdge = Math.min(w, h);
+    // scale >= 1; only kicks in on small screens (phones).
+    const scale = Math.min(MAX_RENDER_SCALE, Math.max(1, REFERENCE_MIN_EDGE / minEdge));
+    // Backing store / logical coordinate space (what all game code uses).
+    canvas.width = Math.round(w * scale);
+    canvas.height = Math.round(h * scale);
+    // Displayed size always fills the viewport; browser downscales the
+    // larger backing store to fit, which is the zoom-out effect.
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
 }
 resize();
 window.addEventListener('resize', resize);
@@ -4787,7 +4803,9 @@ function isPortraitBlocked() {
     let downX = 0, downY = 0, activePointerId = null;
     function pos(e) {
         const r = canvas.getBoundingClientRect();
-        return { x: e.clientX - r.left, y: e.clientY - r.top };
+        const sx = r.width ? canvas.width / r.width : 1;
+        const sy = r.height ? canvas.height / r.height : 1;
+        return { x: (e.clientX - r.left) * sx, y: (e.clientY - r.top) * sy };
     }
     function activeRects() {
         if (gameState === 'characterSelect') return characterCardRects;
